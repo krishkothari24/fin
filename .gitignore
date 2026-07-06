@@ -216,3 +216,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Elite Trading: per-person state, never commit ---
+# Personal caps/allowlist (each person keeps their own). Example is tracked.
+guardrails/config.yaml
+guardrails/KILLSWITCH
+# Runtime state + audit trail (personal, and rewritten every run)
+logs/*.json
+logs/*.jsonl
+# Personal financial data drops (statements, exports) — never commit
+context/*
+!context/README.md
+# Plaid / other secrets
+.env
+plaid_tokens.json
+# OS cruft
+.DS_Store

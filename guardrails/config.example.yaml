@@ -1,0 +1,28 @@
+# Trade guardrail config — copy to config.yaml and edit.
+# These limits are enforced IN CODE by guardrails/gate.py via a Claude Code
+# PreToolUse hook. Claude cannot override them, no matter what it's told.
+# Each friend keeps their own copy with their own numbers.
+
+per_trade_cap_usd: 100      # max estimated $ per single buy order
+daily_cap_usd: 300          # max total $ in buys per calendar day
+max_trades_per_day: 5       # buys + sells combined
+cooldown_seconds: 300       # minimum gap between any two executed orders
+
+allow_options: false        # keep false until you REALLY mean it
+
+# If allowlist is non-empty, ONLY these tickers can be traded.
+# Leave empty ([] style: just delete the entries) to allow any ticker
+# not on the blocklist.
+ticker_allowlist:
+  - VOO
+  - AAPL
+  - MSFT
+  - NVDA
+
+ticker_blocklist:
+  - GME    # example: keep meme-squeeze names out of an autonomous agent
+
+# KILL SWITCH: to stop all trading instantly, create an empty file at
+# guardrails/KILLSWITCH  (e.g. `touch guardrails/KILLSWITCH`).
+# Delete it to resume. Also tell the agent "STOP TRADING" — but the file
+# is the one that actually enforces it.
