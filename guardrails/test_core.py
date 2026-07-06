@@ -95,10 +95,25 @@ def test_block_cooldown():
     assert d.verdict == "BLOCK" and "Cooldown" in d.reason
 
 
-def test_block_unpriced_market_order():
-    tn, ti = equity(type="market", qty="3", price=None)   # qty, no price
+def test_block_market_order_disabled():
+    # Market orders are off by default — blocked before we even price them.
+    tn, ti = equity(type="market", qty="3", price=None)
     d = core.decide(tn, ti, CFG, fresh_ledger(), NOW)
+    assert d.verdict == "BLOCK" and "Market orders are disabled" in d.reason
+
+
+def test_block_unpriced_when_market_allowed():
+    # With market orders explicitly enabled, an unpriced one still can't be sized.
+    cfg = {**CFG, "allow_market_orders": True}
+    tn, ti = equity(type="market", qty="3", price=None)
+    d = core.decide(tn, ti, cfg, fresh_ledger(), NOW)
     assert d.verdict == "BLOCK" and "market order with no price" in d.reason
+
+
+def test_stop_market_also_blocked_by_default():
+    tn, ti = equity(type="stop_market", qty="1", price="50")
+    d = core.decide(tn, ti, CFG, fresh_ledger(), NOW)
+    assert d.verdict == "BLOCK" and "Market orders are disabled" in d.reason
 
 
 def test_block_options_disabled():

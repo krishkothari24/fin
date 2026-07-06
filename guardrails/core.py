@@ -38,9 +38,13 @@ DEFAULT_CONFIG = {
     "max_trades_per_day": 5,
     "cooldown_seconds": 300,
     "allow_options": False,
+    "allow_market_orders": False,   # limits only by default (price protection)
     "ticker_allowlist": [],
     "ticker_blocklist": [],
 }
+
+# Order types with no price protection — blocked unless allow_market_orders.
+MARKET_ORDER_TYPES = ("market", "stop_market")
 
 
 @dataclass
@@ -120,9 +124,13 @@ def decide(tool_name: str, tool_input: dict, config: dict, ledger: dict,
     symbol = extract_symbol(tool_input)
     notional, err = estimate_notional(tool_input)
 
-    # 2. Market-type gate
+    # 2. Market-type gate: options + market orders both off by default.
     if is_option_tool(tool_name) and not cfg["allow_options"]:
         return block("Options trading is disabled in config (allow_options: false).", notional)
+    order_type = str(tool_input.get("type", "")).lower()
+    if order_type in MARKET_ORDER_TYPES and not cfg["allow_market_orders"]:
+        return block("Market orders are disabled (allow_market_orders: false); "
+                     "use a limit order for price protection.", notional)
 
     # 3/4. Ticker lists
     if symbol is None:

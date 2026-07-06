@@ -50,9 +50,18 @@ Finish the trading gate and prove it end-to-end with a tiny real account.
       (`claude mcp add robinhood-trading` → `mcp__robinhood-trading__*`).
 - [ ] **T2.2** Prove the hook fires with a deliberately-blocked test trade
       before any real money.
-- [ ] **T2.3** Gate hardening: ledger meters attempts-not-fills; inline-YAML
-      allowlist footgun (fails open); market orders not code-blocked; options
-      unsupported in gate. Decide/fix each.
+- [~] **T2.3** Gate hardening (code-only, done where possible without live MCP):
+      - [x] Inline-YAML allowlist footgun fixed — `config.py` parses inline lists
+            (was silently failing open). Covered by `test_config.py`.
+      - [x] Market orders code-blocked by default (`allow_market_orders: false`)
+            in `core.py`; `stop_market` too. Covered by `test_core.py`.
+      - [x] Split adapter I/O into `config.py` / `ledger.py` / `audit.py`;
+            `gate.py` is now just paths + wiring.
+      - [ ] Ledger meters attempts-not-fills — needs the live order-result schema
+            to reconcile; deferred to Phase 2 live work (PostToolUse refund on
+            rejected orders). Current behavior is fail-safe (over-counts).
+      - [ ] Options unsupported in gate (no symbol / notional ×100) — keep
+            `allow_options: false`; revisit only if enabling options.
 - [ ] **T2.4** Get real cap values from user; create `guardrails/config.yaml`.
 - [ ] **T2.5** Connect Robinhood MCP; open + fund a small dedicated Agentic
       account.

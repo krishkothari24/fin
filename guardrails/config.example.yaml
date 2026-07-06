@@ -9,10 +9,12 @@ max_trades_per_day: 5       # buys + sells combined
 cooldown_seconds: 300       # minimum gap between any two executed orders
 
 allow_options: false        # keep false until you REALLY mean it
+allow_market_orders: false  # limits only by default; market orders have no
+                            # price protection and can't be reliably pre-priced
 
 # If allowlist is non-empty, ONLY these tickers can be traded.
-# Leave empty ([] style: just delete the entries) to allow any ticker
-# not on the blocklist.
+# Both styles work: block form (below) or inline `ticker_allowlist: [VOO, AAPL]`.
+# Leave empty to allow any ticker not on the blocklist.
 ticker_allowlist:
   - VOO
   - AAPL
