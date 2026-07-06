@@ -1,116 +1,103 @@
-# Elite Trading → Personal Finance Advisor — build roadmap
+# Personal Finance Advisor — phased roadmap
 
-The project grew from "local trading gate" into **two products sharing one
-guardrail core**:
+Two products sharing one guardrail core:
+- **Local execution engine** — per-person Claude Code + gate, trades your own
+  account inside code-enforced caps. Stays local for now.
+- **Hosted read-only advisor** — friends log in for briefs, research, and
+  spending analysis. Read-only; no trades on the server. Ships first, lower risk.
 
-- **Local execution engine** (per-person, Claude Code + gate) — places trades
-  in *your own* account, inside code-enforced caps. Stays local for now.
-- **Hosted read-only advisor** (multi-user web app) — friends log in for
-  morning briefs, persona research, and spending analysis. Read-only:
-  no trades execute on the server. Lower legal risk, ships first.
+**Decided (2026-07):** hosted app is read-only now; execution stays
+local/per-person; architect so hosted execution can be added later without a
+rewrite. Hosted execution is gated behind a legal + security review.
 
-**Decided direction (2026-07):** hosted app is **read-only** now (research +
-spending); trade execution stays **local/per-person**. We architect so hosted
-execution can be added *later* without a rewrite — see the guardrail-core split
-below. Going live with hosted execution needs a legal + security pass first
-(broker-dealer / adviser exposure, custody of others' tokens).
-
-See [HANDOFF.md](HANDOFF.md) for original decisions, [CLAUDE.md](CLAUDE.md) for
-operating rules.
+Phases are ordered so each ships value on its own. Do them top-to-bottom unless
+noted. `[x]` = done, `[ ]` = todo. See [HANDOFF.md](HANDOFF.md) for original
+decisions, [CLAUDE.md](CLAUDE.md) for operating rules.
 
 ---
 
-## TRACK A — Local execution engine (the guardrail + trading loop)
+## Phase 0 — Lock the foundation  (housekeeping, no risk)
+Get the repo into a clean, reusable state before building on it.
+- [x] Flatten `elite-trading/*` to repo root so hook + `gate.py` paths resolve.
+- [x] Gitignore personal state (config.yaml, KILLSWITCH, logs, context/, .env).
+- [x] Create the `context/` CSV bridge folder.
+- [x] **T0.1** Commit the restructuring as one clean commit.
+- [x] **T0.2** Extract guardrail decision logic into a pure
+      `guardrails/core.py` — `decide(...) -> Decision(verdict, reason, notional,
+      ledger)` — with `gate.py` as a thin Claude Code-hook adapter. Verified
+      byte-identical behavior end-to-end.
+- [x] **T0.3** `guardrails/test_core.py` — 13 scenarios, dependency-free
+      (`python3 guardrails/test_core.py` or pytest). All green.
 
-### A1 — Make the gate actually FIRE  ← START HERE
-- [x] **Nesting resolved** — flattened `elite-trading/*` to repo root; hook path
-      + `gate.py` ROOT now resolve correctly.
-- [ ] **Extract guardrail core.** Split the decision logic out of `gate.py` into
-      a pure `guardrails/core.py` — `decide(order, config, ledger) -> (verdict,
-      reason)` — with `gate.py` as a thin Claude Code-hook adapter. This is what
-      lets us reuse the exact same rules as server middleware later.
-- [ ] **Fix + prove the hook matcher.** Execution is local, so target the
-      locally-added MCP prefix (`claude mcp add robinhood-trading` →
-      `mcp__robinhood-trading__*`). Prove it fires with a blocked test trade
+## Phase 1 — Spending advisor MVP (CSV)  ← highest value, zero infra
+Answer "what drove my spending?" against a real statement, today.
+- [x] **T1.1** Normalized schema (`date, merchant, amount, category, account`,
+      spend-positive) — defined in `advisor/analyze.py`; same shape Plaid emits.
+- [x] **T1.2** `spending-advisor` skill + `advisor/` package (deterministic
+      Decimal math; LLM only narrates). Isolated: no trading tools in context.
+      Modular: `schema` / `categories` / `parsing` / `aggregate` / `analyze`
+      (CLI) + `test_advisor`.
+- [x] **T1.3** Verified against `advisor/sample-statement.csv` (synthetic).
+      TODO: run against a real statement once you drop one in `context/`.
+- [x] **T1.4** Analyzer emits: total/net, by_category, top_merchants (×15),
+      recurring_candidates, date_range. TODO refinements: month-over-month
+      deltas (needs 2+ statements), refund-net-per-category, merchant-name
+      cleanup for a few noisy cases.
+
+## Phase 2 — Local execution engine, live
+Finish the trading gate and prove it end-to-end with a tiny real account.
+- [ ] **T2.1** Fix the hook matcher for the local MCP prefix
+      (`claude mcp add robinhood-trading` → `mcp__robinhood-trading__*`).
+- [ ] **T2.2** Prove the hook fires with a deliberately-blocked test trade
       before any real money.
-
-### A1b — Gate correctness hardening (code-only, no live account)
-- [ ] **Ledger meters attempts, not fills** — debits cap at PreToolUse, before
-      the order executes; failed orders still burn the daily cap. Decide: accept,
-      or reconcile from actual fills.
-- [ ] **YAML footgun** — inline-list config silently disables the allowlist
-      (fails OPEN). Harden the parser or hard-fail on unknown shapes.
-- [ ] **Market orders not code-blocked**, only prompt-blocked. Enforce in the
-      gate if "limits only" is a real invariant.
-- [ ] **Options unsupported in gate** (no symbol, notional missing ×100). Keep
-      `allow_options: false` or fix before enabling.
-- [ ] Commit the 8-scenario test harness so edits are regression-checked.
-- [x] **Gitignore personal state** — config.yaml, KILLSWITCH, logs, context/,
-      .env all ignored.
-
-### A2 — Personal setup & config
-- [ ] Real cap values from the user; create `guardrails/config.yaml`.
-- [ ] Connect Robinhood MCP locally; open + fund a small dedicated Agentic
+- [ ] **T2.3** Gate hardening: ledger meters attempts-not-fills; inline-YAML
+      allowlist footgun (fails open); market orders not code-blocked; options
+      unsupported in gate. Decide/fix each.
+- [ ] **T2.4** Get real cap values from user; create `guardrails/config.yaml`.
+- [ ] **T2.5** Connect Robinhood MCP; open + fund a small dedicated Agentic
       account.
+- [ ] **T2.6** Live-fire: blocked order → confirm block + log; one tiny real
+      trade → confirm fill + ledger; kill-switch test.
+- [ ] **T2.7** Exercise the loop: morning-brief → personas → trade-execution
+      (simulate-first, limits only); tune skill prompts.
 
-### A3 — Live-fire safety test
-- [ ] Deliberately-blocked order → confirm block + `logs/trades.jsonl` entry.
-- [ ] One tiny real end-to-end trade → confirm fill + ledger update.
-- [ ] Kill switch test (`touch guardrails/KILLSWITCH`).
+## Phase 3 — Plaid automation  (replaces manual CSV)
+Live, always-fresh transactions feeding the same schema from Phase 1.
+- [ ] **T3.1** Create the Plaid app (user has 1 dev account); pick products
+      (transactions) + environment.
+- [ ] **T3.2** Scaffold + test against MOCK data using Plaid's Local MCP (AI
+      toolkit) — no real accounts yet. (Neither Plaid MCP returns real
+      transactions; Link + `/transactions/sync` is the actual pipe.)
+- [ ] **T3.3** Build the Link flow to connect real accounts once; exchange
+      public token → access_token; store in `.env` / vault (never committed).
+- [ ] **T3.4** `/transactions/sync` pull → normalize into the Phase-1 schema →
+      write to `context/` (local) so the advisor is unchanged downstream.
 
-### A4 — Exercise the research loop
-- [ ] morning-brief → personas → trade-execution (simulate-first, limits only).
-- [ ] Tune skill prompts on real output.
+## Phase 4 — Hosted app foundations  (big build; decisions FIRST)
+Stand up the multi-tenant shell. Scope this before writing code.
+- [ ] **T4.1** Choose the stack: web framework, hosting, auth provider
+      (Clerk/Auth0/Supabase). Decision doc first.
+- [ ] **T4.2** Build the per-user token vault (the "gateway"): encrypted at
+      rest, per-user Plaid Items + read-only brokerage creds. The custody
+      boundary.
+- [ ] **T4.3** Call the Anthropic API server-side (not Claude Code), with strict
+      per-user context isolation so no one sees another's data.
+- [ ] **T4.4** Login + connect-accounts onboarding for friends.
 
----
+## Phase 5 — Port research + spending to the hosted app
+- [ ] **T5.1** Run morning-brief + personas server-side, per user.
+- [ ] **T5.2** Run the spending advisor server-side, per user, over their vault
+      data.
+- [ ] **T5.3** Multi-user isolation + read-only guarantees verified.
 
-## TRACK B — Spending advisor (Plaid + statements)  [read-only, isolated]
+## Phase 6 — Hosted execution  (LATER, gated — do not start without these)
+- [ ] **T6.1** Legal review: adviser / broker-dealer exposure of executing in
+      others' accounts from your platform.
+- [ ] **T6.2** Security review: custody of trade authority + bank tokens.
+- [ ] **T6.3** Add a server-middleware adapter over `guardrails/core.py` — same
+      caps, different transport. Only after T6.1 + T6.2 pass.
 
-Separate surface with NO order tools in context (handoff decision #3).
-
-### B1 — CSV bridge  ← works TODAY
-- [x] `context/` folder created + gitignored (statements are PII).
-- [ ] **Spending-advisor skill** that reads `context/*` and answers
-      "what drove my spending?" — categorization, top merchants, trends.
-      No trading tools in its context.
-
-### B2 — Plaid automation (user has 1 Plaid dev account)
-- [ ] Plaid app setup; Link flow to connect real accounts once.
-- [ ] `/transactions/sync` pull → normalize into the same shape the CSV bridge
-      uses, written to `context/` (or a DB in the hosted app). Token in `.env` /
-      vault, never committed.
-- [ ] Use Plaid's Local MCP (AI toolkit) to scaffold + test against MOCK data
-      before touching real accounts. (Note: neither Plaid MCP returns real
-      transactions — they're dev tooling; Link + /transactions/sync is the pipe.)
-
----
-
-## TRACK C — Hosted multi-user app (read-only advisor)  [the big build]
-
-Friends log in; each connects their own read-only accounts. Needs its own
-scoping pass before starting — framework, hosting, and auth choices are open.
-
-### C1 — Foundations (decisions first, then build)
-- [ ] Choose stack: web framework, hosting, auth (Clerk/Auth0/Supabase).
-- [ ] **Per-user token vault** (the "gateway"): encrypted at rest, per-user
-      Plaid Items + read-only brokerage creds. This is the custody boundary.
-- [ ] Anthropic API called **server-side** (not Claude Code); per-user context
-      isolation so no one sees another's data.
-
-### C2 — Port the shared research + spending surfaces
-- [ ] Morning brief + personas + spending advisor run server-side per user.
-- [ ] Reuse `guardrails/core.py` where relevant (read-only, but same discipline).
-
-### C3 — (LATER, gated) Hosted execution
-- [ ] Legal review: adviser/broker-dealer exposure of executing in others'
-      accounts from your platform.
-- [ ] Security review: custody of trade authority + bank tokens.
-- [ ] Add server-middleware adapter over `guardrails/core.py` — same caps,
-      different transport. Only after the two reviews pass.
-
----
-
-## Later / independent
+## Backlog (independent, any time)
 - [ ] Persona backtesting / eval against past briefs before trusting
       auto-execute.
-- [ ] Packaging the local engine for friends who want their own execution copy.
+- [ ] Package the local engine for friends who want their own execution copy.
