@@ -1,10 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Job, PgBoss } from "pg-boss";
+import { InvestmentsSyncService } from "../investments/investments-sync.service";
 import { SnapshotService } from "./snapshot.service";
 import { SyncService } from "./sync.service";
 
 export const SYNC_QUEUE = "sync-item";
+export const INVESTMENTS_QUEUE = "sync-investments";
 export const SNAPSHOT_QUEUE = "snapshot-balances";
 /** Daily at 06:00 UTC — cheap and off-peak. */
 const SNAPSHOT_CRON = "0 6 * * *";
@@ -31,6 +33,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     private readonly sync: SyncService,
     private readonly snapshot: SnapshotService,
+    private readonly investments: InvestmentsSyncService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -58,6 +61,16 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         }
       });
 
+      // Investments sync (holdings + investment transactions), enqueued on
+      // connect + on HOLDINGS / INVESTMENTS_TRANSACTIONS webhooks.
+      await this.boss.createQueue(INVESTMENTS_QUEUE);
+      await this.boss.work<SyncJob>(INVESTMENTS_QUEUE, async (jobs: Job<SyncJob>[]) => {
+        for (const job of jobs) {
+          this.logger.log(`investments job ${job.id} -> item ${job.data.itemId}`);
+          await this.investments.syncItem(job.data.itemId);
+        }
+      });
+
       // Daily balance snapshots (cron -> net-worth-over-time).
       await this.boss.createQueue(SNAPSHOT_QUEUE);
       await this.boss.work(SNAPSHOT_QUEUE, async () => {
@@ -67,7 +80,8 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
 
       this.ready = true;
       this.logger.log(
-        `pg-boss started; workers on '${SYNC_QUEUE}' + '${SNAPSHOT_QUEUE}' (daily ${SNAPSHOT_CRON})`,
+        `pg-boss started; workers on '${SYNC_QUEUE}', '${INVESTMENTS_QUEUE}', ` +
+          `'${SNAPSHOT_QUEUE}' (daily ${SNAPSHOT_CRON})`,
       );
     } catch (err) {
       this.logger.warn(`pg-boss failed to start; job queue disabled: ${String(err)}`);
@@ -86,6 +100,15 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     await this.boss.send(SYNC_QUEUE, { itemId });
+  }
+
+  /** Enqueue an investments sync (holdings + investment transactions). Safe no-op if queue is down. */
+  async enqueueInvestmentsSync(itemId: string): Promise<void> {
+    if (!this.ready || !this.boss) {
+      this.logger.warn(`queue not ready — skipping investments enqueue for item ${itemId}`);
+      return;
+    }
+    await this.boss.send(INVESTMENTS_QUEUE, { itemId });
   }
 
   async onModuleDestroy(): Promise<void> {

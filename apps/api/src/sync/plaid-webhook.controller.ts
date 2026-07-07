@@ -86,6 +86,13 @@ export class PlaidWebhookController {
       return;
     }
 
+    // Investments: holdings changed, or new/updated investment transactions are ready.
+    if (webhook_type === "HOLDINGS" || webhook_type === "INVESTMENTS_TRANSACTIONS") {
+      const item = await this.prisma.plaidItem.findUnique({ where: { plaidItemId: item_id } });
+      if (item) await this.queue.enqueueInvestmentsSync(item.id);
+      return;
+    }
+
     if (webhook_type === "ITEM" && webhook_code === "ERROR") {
       if (body.error?.error_code === "ITEM_LOGIN_REQUIRED") {
         await this.prisma.plaidItem.updateMany({

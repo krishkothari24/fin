@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { InvestmentsModule } from "../investments/investments.module";
 import { PlaidModule } from "../plaid/plaid.module";
 import { PlaidWebhookController } from "./plaid-webhook.controller";
 import { QueueService } from "./queue.service";
@@ -12,7 +13,7 @@ import { WebhookVerificationService } from "./webhook-verification.service";
  * CryptoModule are @Global, so only PlaidModule needs importing here.
  */
 @Module({
-  imports: [PlaidModule],
+  imports: [PlaidModule, InvestmentsModule],
   controllers: [PlaidWebhookController],
   providers: [SyncService, QueueService, WebhookVerificationService, SnapshotService],
   exports: [SyncService, QueueService, SnapshotService],

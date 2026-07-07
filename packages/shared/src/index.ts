@@ -71,6 +71,64 @@ export interface TransactionsPage {
   offset: number;
 }
 
+// ---- investments (Plaid Investments product) ---------------------------
+
+export interface SecurityDto {
+  id: string;
+  tickerSymbol: string | null;
+  name: string | null;
+  type: string | null;
+  closePrice: string | null;
+  currency: string | null;
+}
+
+/** One position: a quantity of one security in one account. Money as strings. */
+export interface HoldingDto {
+  id: string;
+  accountId: string;
+  security: SecurityDto;
+  quantity: string;
+  institutionPrice: string | null;
+  value: string | null; // institution_value (market value)
+  costBasis: string | null;
+  gainLoss: string | null; // value - costBasis, when both known
+  currency: string | null;
+}
+
+/** Holdings for the user plus portfolio totals. */
+export interface HoldingsResponse {
+  holdings: HoldingDto[];
+  totals: {
+    value: string;
+    costBasis: string;
+    gainLoss: string;
+    currency: string;
+  };
+}
+
+export interface InvestmentTransactionDto {
+  id: string;
+  accountId: string;
+  security: { tickerSymbol: string | null; name: string | null } | null;
+  type: string; // buy | sell | cash | fee | transfer | cancel
+  subtype: string | null;
+  quantity: string | null;
+  amount: string; // Plaid sign: positive = cash out of the account
+  price: string | null;
+  fees: string | null;
+  date: string; // ISO date
+  name: string;
+  currency: string | null;
+}
+
+/** A page of investment transactions (offset pagination). */
+export interface InvestmentTransactionsPage {
+  transactions: InvestmentTransactionDto[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ---- dashboard config ("choose what to show") --------------------------
 
 export type WidgetId =
@@ -79,6 +137,7 @@ export type WidgetId =
   | "spending_by_category"
   | "recent_transactions"
   | "cash_flow"
+  | "holdings"
   | "recurring";
 
 /** Runtime list of every WidgetId (for validation). Keep in sync with WidgetId. */
@@ -88,6 +147,7 @@ export const WIDGET_IDS: WidgetId[] = [
   "spending_by_category",
   "recent_transactions",
   "cash_flow",
+  "holdings",
   "recurring",
 ];
 
@@ -105,7 +165,8 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
     { id: "spending_by_category", enabled: true, order: 2 },
     { id: "recent_transactions", enabled: true, order: 3 },
     { id: "cash_flow", enabled: true, order: 4 },
-    { id: "recurring", enabled: false, order: 5 },
+    { id: "holdings", enabled: false, order: 5 },
+    { id: "recurring", enabled: false, order: 6 },
   ],
   hiddenAccountIds: [],
   defaultRangeDays: 30,

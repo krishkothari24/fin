@@ -48,7 +48,13 @@ Under those roles:
   never selectable even by its owner via that path,
 - `webhook_events` (a system table) is invisible entirely.
 
-All four are asserted live by `pnpm --filter @fin/api e2e:rls`, which impersonates
+The same pattern extends to the Phase 7 investments tables (migration
+`…_phase7_investments`): `holdings` and `investment_transactions` are user-scoped
+(join through `accounts → plaid_items`); `securities` is public market data and is
+RLS-enabled with **no** grant/policy, so it's invisible to `authenticated` like
+`webhook_events` (the API joins it in server-side).
+
+All of this is asserted live by `pnpm --filter @fin/api e2e:rls`, which impersonates
 the `authenticated` role for a second user and proves it cannot see the first
 user's accounts, items, transactions, tokens, or the webhook log.
 

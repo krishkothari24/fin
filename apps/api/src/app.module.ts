@@ -13,6 +13,7 @@ import { AccountsModule } from "./accounts/accounts.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { AggregationsModule } from "./aggregations/aggregations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { InvestmentsModule } from "./investments/investments.module";
 import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
@@ -42,6 +43,7 @@ import { ObservabilityModule } from "./observability/observability.module";
     TransactionsModule,
     AggregationsModule,
     DashboardModule,
+    InvestmentsModule,
   ],
   providers: [
     // Global rate-limit guard. Runs ahead of route guards; @SkipThrottle exempts

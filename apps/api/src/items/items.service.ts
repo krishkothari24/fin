@@ -49,8 +49,9 @@ export class ItemsService {
     const accounts = await this.plaid.getAccounts(accessToken);
     await this.storeAccounts(item.id, accounts);
 
-    // Kick off the initial transaction pull in the background (Phase 3).
+    // Kick off the initial transaction pull + investments pull in the background.
     await this.queue.enqueueSync(item.id);
+    await this.queue.enqueueInvestmentsSync(item.id);
     return { itemId: item.id, institutionName, accountsConnected: accounts.length };
   }
 

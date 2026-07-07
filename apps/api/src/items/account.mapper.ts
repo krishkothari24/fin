@@ -1,4 +1,4 @@
-import { AccountBase } from "plaid";
+import { AccountBase, InvestmentAccount } from "plaid";
 
 /** Shape we persist for an account (matches Prisma Account scalar fields). */
 export interface AccountRecord {
@@ -14,8 +14,12 @@ export interface AccountRecord {
   currency: string;
 }
 
-/** Map a Plaid account into our persistence shape. Pure — no I/O. */
-export function mapPlaidAccount(itemId: string, a: AccountBase): AccountRecord {
+/**
+ * Map a Plaid account into our persistence shape. Pure — no I/O. Accepts either
+ * a regular `AccountBase` or the Investments product's `InvestmentAccount`
+ * (identical shape apart from a narrower `verification_status`, which we ignore).
+ */
+export function mapPlaidAccount(itemId: string, a: AccountBase | InvestmentAccount): AccountRecord {
   return {
     itemId,
     plaidAccountId: a.account_id,

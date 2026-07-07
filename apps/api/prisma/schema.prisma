@@ -67,6 +67,8 @@ model Account {
   updatedAt        DateTime          @updatedAt @map("updated_at")
   transactions     Transaction[]
   snapshots        BalanceSnapshot[]
+  holdings         Holding[]
+  investmentTxns   InvestmentTransaction[]
 
   @@index([itemId])
   @@map("accounts")
@@ -128,4 +130,72 @@ model WebhookEvent {
   receivedAt  DateTime @default(now()) @map("received_at")
 
   @@map("webhook_events")
+}
+
+/// A security (stock / ETF / fund / cash) referenced by holdings & investment
+/// transactions. Public market data (ticker, name, price) — NOT user-scoped;
+/// deduped across users by Plaid's `security_id`.
+model Security {
+  id               String                  @id @default(uuid()) @db.Uuid
+  plaidSecurityId  String                  @unique @map("plaid_security_id")
+  name             String?
+  tickerSymbol     String?                 @map("ticker_symbol")
+  type             String?
+  closePrice       Decimal?                @map("close_price") @db.Decimal(20, 6)
+  closePriceAsOf   DateTime?               @map("close_price_as_of") @db.Date
+  currency         String?                 @default("USD")
+  isCashEquivalent Boolean                 @default(false) @map("is_cash_equivalent")
+  cusip            String?
+  isin             String?
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  holdings         Holding[]
+  investmentTxns   InvestmentTransaction[]
+
+  @@map("securities")
+}
+
+/// A current position: how much of one security is held in one account. This is a
+/// snapshot (replaced on each investments sync), so it's unique per (account, security).
+model Holding {
+  id                   String    @id @default(uuid()) @db.Uuid
+  accountId            String    @map("account_id") @db.Uuid
+  account              Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  securityId           String    @map("security_id") @db.Uuid
+  security             Security  @relation(fields: [securityId], references: [id], onDelete: Cascade)
+  quantity             Decimal   @db.Decimal(28, 8)
+  institutionPrice     Decimal?  @map("institution_price") @db.Decimal(20, 6)
+  institutionPriceAsOf DateTime? @map("institution_price_as_of") @db.Date
+  institutionValue     Decimal?  @map("institution_value") @db.Decimal(20, 4)
+  costBasis            Decimal?  @map("cost_basis") @db.Decimal(20, 4)
+  currency             String?   @default("USD")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@unique([accountId, securityId])
+  @@index([accountId])
+  @@map("holdings")
+}
+
+/// An investment transaction (buy / sell / dividend / fee / transfer …).
+/// `amount` follows Plaid's sign: positive = cash OUT of the account (e.g. a buy).
+model InvestmentTransaction {
+  id                           String    @id @default(uuid()) @db.Uuid
+  accountId                    String    @map("account_id") @db.Uuid
+  account                      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  securityId                   String?   @map("security_id") @db.Uuid
+  security                     Security? @relation(fields: [securityId], references: [id], onDelete: SetNull)
+  plaidInvestmentTransactionId String    @unique @map("plaid_investment_transaction_id")
+  type                         String
+  subtype                      String?
+  quantity                     Decimal?  @db.Decimal(28, 8)
+  amount                       Decimal   @db.Decimal(20, 4)
+  price                        Decimal?  @db.Decimal(20, 6)
+  fees                         Decimal?  @db.Decimal(20, 4)
+  date                         DateTime  @db.Date
+  name                         String
+  currency                     String?   @default("USD")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
+
+  @@index([accountId, date])
+  @@map("investment_transactions")
 }

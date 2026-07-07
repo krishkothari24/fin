@@ -4,6 +4,8 @@ import {
   AccountBase,
   Configuration,
   CountryCode,
+  InvestmentsHoldingsGetResponse,
+  InvestmentsTransactionsGetResponse,
   JWKPublicKey,
   PlaidApi,
   PlaidEnvironments,
@@ -39,12 +41,18 @@ export class PlaidService {
     );
   }
 
-  /** New connection: a link_token the frontend opens Plaid Link with. */
+  /**
+   * New connection: a link_token the frontend opens Plaid Link with.
+   * Transactions is required; Investments is requested via
+   * `required_if_supported_products` so investment-capable institutions grant
+   * holdings + investment transactions, while depository-only banks still link.
+   */
   async createLinkToken(userId: string) {
     const res = await this.client.linkTokenCreate({
       user: { client_user_id: userId },
       client_name: this.clientName,
       products: [Products.Transactions],
+      required_if_supported_products: [Products.Investments],
       country_codes: [CountryCode.Us],
       language: "en",
       webhook: this.webhookUrl,
@@ -113,6 +121,36 @@ export class PlaidService {
     return res.data;
   }
 
+  /**
+   * Current holdings for an item: `/investments/holdings/get` returns the
+   * accounts, the positions (holdings), and the securities they reference.
+   */
+  async investmentsHoldings(accessToken: string): Promise<InvestmentsHoldingsGetResponse> {
+    const res = await this.client.investmentsHoldingsGet({ access_token: accessToken });
+    return res.data;
+  }
+
+  /**
+   * One page of investment transactions over [startDate, endDate].
+   * Unlike `/transactions/sync`, this is date-range + offset paginated; loop
+   * while `offset + count < total_investment_transactions`.
+   */
+  async investmentsTransactions(
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+    offset: number,
+    count = 500,
+  ): Promise<InvestmentsTransactionsGetResponse> {
+    const res = await this.client.investmentsTransactionsGet({
+      access_token: accessToken,
+      start_date: startDate,
+      end_date: endDate,
+      options: { offset, count },
+    });
+    return res.data;
+  }
+
   /** Fetch the public key Plaid signed a webhook JWT with (verified in WebhookVerificationService). */
   async getWebhookVerificationKey(keyId: string): Promise<JWKPublicKey> {
     const res = await this.client.webhookVerificationKeyGet({ key_id: keyId });
@@ -127,11 +165,15 @@ export class PlaidService {
     await this.client.sandboxItemFireWebhook({ access_token: accessToken, webhook_code: code });
   }
 
-  /** Sandbox-only: mint a public_token without the frontend Link flow (for tests). */
+  /**
+   * Sandbox-only: mint a public_token without the frontend Link flow (for tests).
+   * Includes Investments so the sandbox item carries holdings + investment
+   * transactions (ins_109508 supports it).
+   */
   async sandboxCreatePublicToken(institutionId = "ins_109508"): Promise<string> {
     const res = await this.client.sandboxPublicTokenCreate({
       institution_id: institutionId,
-      initial_products: [Products.Transactions],
+      initial_products: [Products.Transactions, Products.Investments],
     });
     return res.data.public_token;
   }

@@ -1,6 +1,6 @@
 # fin-dashboard — Technical State of the Application
 
-_Snapshot as of 2026-07-07 · Phases 1–6 complete (Phases 4–6 not yet committed) · security → [SECURITY.md](./SECURITY.md)_
+_Snapshot as of 2026-07-07 · Phases 1–7 complete (Phase 7 = Plaid Investments) · security → [SECURITY.md](./SECURITY.md)_
 
 This document is the ground-truth of **what exists, how it works, and why** — written
 to be read end-to-end by someone who has never touched Prisma, Plaid, or NestJS. It is
@@ -44,6 +44,7 @@ The build is organized into 6 phases. We have finished 5 of them.
 | **4** | Read & aggregation API: accounts, transactions, net worth, spending, cash flow | ✅ **done, verified live** |
 | **5** | Dashboard config + daily balance snapshots (net-worth-over-time) | ✅ **done, verified live** |
 | **6** | Hardening: RLS, rate limiting, structured logging, sanitized errors, helmet/CORS, Sentry | ✅ **done, verified live** |
+| **7** | Plaid **Investments**: holdings/positions + investment transactions + read API | ✅ **done, verified live** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -507,6 +508,8 @@ except health):
 | `GET  /api/aggregations/cash-flow` | income vs outflow per month (date-range) |
 | `GET  /api/dashboard/config` | the user's saved dashboard config (or defaults) |
 | `PUT  /api/dashboard/config` | save the dashboard config (validated) |
+| `GET  /api/investments/holdings` | positions + portfolio totals (value / cost basis / gain-loss) — Phase 7 (§20) |
+| `GET  /api/investments/transactions` | investment txns (filter account/date/type) + paginate — Phase 7 |
 
 **Phase 6 added no new endpoints — hardening only** (RLS, rate limiting, logging, sanitized
 errors, helmet/CORS). Every route above now runs behind the global rate limiter and returns the
@@ -545,6 +548,7 @@ pnpm --filter @fin/api e2e:read          # Phase 4: seed → accounts/transactio
 pnpm --filter @fin/api e2e:dashboard     # Phase 5: config round-trip + snapshot → non-empty net-worth series → purge
 pnpm --filter @fin/api e2e:rls           # Phase 6: two-user RLS isolation via the authenticated role → purge
 pnpm --filter @fin/api e2e:hardening     # Phase 6: HTTP headers, sanitized errors, 429 rate limit, skip-throttle
+pnpm --filter @fin/api e2e:investments   # Phase 7: holdings + investment txns sync, totals, hidden-exclusion, idempotency → purge
 ```
 
 **What's tested automatically:**
@@ -593,8 +597,9 @@ accounts/infra, and is enumerated in [SECURITY.md](./SECURITY.md) → "Go-to-pro
 4. Wire **real Supabase login** on a frontend so JWTs come from actual sign-ups (the guard
    already verifies them; there's just no UI yet).
 
-Fast-follows / future product: Plaid Recurring Transactions, Investments, Liabilities, and the
-`apps/web` frontend the monorepo is structured for.
+Fast-follows / future product: Plaid **Liabilities** (card/loan APR + due dates) and **Recurring
+Transactions** (subscriptions view), and the `apps/web` frontend the monorepo is structured for.
+(Plaid **Investments** — holdings + investment transactions — shipped in Phase 7, §20.)
 
 ---
 
@@ -897,3 +902,78 @@ shared by `main.ts` and the hardening E2E so the test exercises a byte-identical
 HTTP: helmet headers present + `x-powered-by` stripped + `x-request-id` echoed; unauthenticated
 and unknown-route responses use the sanitized shape (with `requestId`, no stack); the limiter
 returns **429** past the budget; and `/health` stays 200 (skip-throttle works).
+
+---
+
+## 20. Phase 7 in depth — Plaid Investments (holdings + investment transactions)
+
+Before this phase, investment/brokerage **balances** already flowed into net worth (an
+investment account is just another account via `/accounts`). Phase 7 adds the *contents* of those
+accounts: **what you own** (holdings/positions) and **what you traded** (investment transactions),
+via Plaid's **Investments** product.
+
+### 20.1 What's connected
+
+The link-token now requests Investments as `required_if_supported_products: [Investments]`
+([plaid.service.ts](../apps/api/src/plaid/plaid.service.ts)) — investment-capable institutions
+grant holdings + investment transactions, while depository-only banks still link normally. Two new
+Plaid calls: `/investments/holdings/get` and `/investments/transactions/get`.
+
+### 20.2 Data model — 3 new tables
+
+- **securities** — one row per security (stock/ETF/fund/cash): ticker, name, type, `close_price`.
+  **Public market data, not user-scoped** — deduped across users by Plaid's `security_id`.
+- **holdings** — a **current position**: quantity of one security in one account, with
+  `institution_price`, `institution_value` (market value), `cost_basis`. Unique per
+  `(account, security)`; it's a **snapshot**, replaced wholesale each sync.
+- **investment_transactions** — buys/sells/dividends/fees/transfers. `amount` follows Plaid's sign
+  (**positive = cash OUT**, e.g. a buy). Unique on the Plaid id; upserted.
+
+### 20.3 The sync engine
+
+[investments-sync.service.ts](../apps/api/src/investments/investments-sync.service.ts), a
+background pg-boss job on the `sync-investments` queue (enqueued on connect and on
+`HOLDINGS` / `INVESTMENTS_TRANSACTIONS` webhooks):
+
+- **Holdings** — upsert securities, then **replace** this item's holdings in one atomic
+  transaction (`deleteMany` + `createMany`) — holdings are a point-in-time snapshot, so a replace
+  is the correct + idempotent model (re-sync yields the same set, never duplicates).
+- **Investment transactions** — date-range + offset paginated over a 730-day window, upserted on
+  the Plaid id (idempotent). Unlike `/transactions/sync`, there's no cursor.
+- **Best-effort** — an institution with no investment accounts returns
+  `NO_INVESTMENT_ACCOUNTS`/`PRODUCTS_NOT_SUPPORTED`; `PRODUCT_NOT_READY` means "still
+  initializing." All are caught and **skipped**, not failed — a webhook re-triggers when ready.
+
+**Performance note (a real fix, not just test tuning):** the sandbox returns **1170** investment
+transactions over 730 days. The first implementation upserted them one-by-one — ~1170 network
+round-trips over the Supabase pooler, which took *minutes*. The writes are now **batched** into
+chunked `$transaction`s (100 upserts per round-trip) and securities are deduped within a run,
+turning that into ~12 round-trips. This is the difference between a 14-minute sync and a few
+seconds.
+
+### 20.4 Read API
+
+Both guarded, user-scoped, hidden accounts excluded (consistent with net worth):
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/investments/holdings` | positions (joined to their security) + portfolio **totals**: `value`, `costBasis`, `gainLoss` (= value − cost basis) |
+| `GET /api/investments/transactions` | investment transactions, filter by account/date/type, paginated |
+
+A `holdings` widget id was added to the dashboard config (`DEFAULT_DASHBOARD_CONFIG`, disabled by
+default — opt-in).
+
+### 20.5 Proof (live)
+
+`pnpm --filter @fin/api e2e:investments` connected the sandbox item, synced, and proved:
+
+- **13 securities, 13 holdings, 1170 investment transactions** landed; DB counts matched the sync
+  result exactly.
+- **Totals cross-check**: portfolio `value = 25446.3932` equalled a raw sum of `institution_value`
+  to the cent; `gainLoss (24218.7732) = value − costBasis (1227.62)`. First transaction was a real
+  Plaid sandbox trade: _"BUY United States Treas Bills…"_.
+- **Hidden-account exclusion**: hiding a held account dropped its holdings and lowered the
+  portfolio value; unhiding restored it.
+- **Idempotency**: a second sync left holdings (13) and investment transactions (1170) unchanged
+  (holdings replaced wholesale; transactions upserted). Then it purged cleanly (securities, being
+  shared market data, are intentionally left behind for reuse).
