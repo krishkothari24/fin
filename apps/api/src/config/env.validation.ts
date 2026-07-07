@@ -27,9 +27,13 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-/** @nestjs/config `validate` hook. */
+/** @nestjs/config `validate` hook. Blank env vars ("") are treated as unset. */
 export function validateEnv(config: Record<string, unknown>): Env {
-  const parsed = envSchema.safeParse(config);
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config)) {
+    cleaned[key] = value === "" ? undefined : value;
+  }
+  const parsed = envSchema.safeParse(cleaned);
   if (!parsed.success) {
     const details = parsed.error.issues
       .map((i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`)
