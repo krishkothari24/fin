@@ -1,0 +1,128 @@
+// Prisma schema — fin-dashboard. Postgres (Supabase).
+// Tables use snake_case via @@map; `Profile.id` mirrors Supabase auth.users.id.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemStatus {
+  good
+  login_required
+  error
+}
+
+/// One row per authenticated user (Supabase owns identity in auth.users).
+model Profile {
+  id              String           @id @db.Uuid
+  email           String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  items           PlaidItem[]
+  dashboardConfig DashboardConfig?
+
+  @@map("profiles")
+}
+
+/// A connected financial institution (Plaid Item). Holds the encrypted token.
+model PlaidItem {
+  id                    String     @id @default(uuid()) @db.Uuid
+  userId                String     @map("user_id") @db.Uuid
+  user                  Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidItemId           String     @unique @map("plaid_item_id")
+  accessTokenCiphertext String     @map("access_token_ciphertext")
+  institutionId         String?    @map("institution_id")
+  institutionName       String?    @map("institution_name")
+  status                ItemStatus @default(good)
+  transactionsCursor    String?    @map("transactions_cursor")
+  lastSyncedAt          DateTime?  @map("last_synced_at")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  accounts              Account[]
+
+  @@index([userId])
+  @@map("plaid_items")
+}
+
+/// A financial account within an Item (checking, credit card, etc.).
+model Account {
+  id               String            @id @default(uuid()) @db.Uuid
+  itemId           String            @map("item_id") @db.Uuid
+  item             PlaidItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  plaidAccountId   String            @unique @map("plaid_account_id")
+  name             String
+  officialName     String?           @map("official_name")
+  mask             String?
+  type             String
+  subtype          String?
+  currentBalance   Decimal?          @map("current_balance") @db.Decimal(20, 4)
+  availableBalance Decimal?          @map("available_balance") @db.Decimal(20, 4)
+  currency         String?           @default("USD")
+  isHidden         Boolean           @default(false) @map("is_hidden")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  transactions     Transaction[]
+  snapshots        BalanceSnapshot[]
+
+  @@index([itemId])
+  @@map("accounts")
+}
+
+/// A transaction. `amount` follows Plaid's sign: positive = money OUT of account.
+model Transaction {
+  id                 String    @id @default(uuid()) @db.Uuid
+  accountId          String    @map("account_id") @db.Uuid
+  account            Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  plaidTransactionId String    @unique @map("plaid_transaction_id")
+  amount             Decimal   @db.Decimal(20, 4)
+  currency           String?   @default("USD")
+  date               DateTime  @db.Date
+  authorizedDate     DateTime? @map("authorized_date") @db.Date
+  name               String
+  merchantName       String?   @map("merchant_name")
+  pending            Boolean   @default(false)
+  pfcPrimary         String?   @map("pfc_primary")
+  pfcDetailed        String?   @map("pfc_detailed")
+  paymentChannel     String?   @map("payment_channel")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([accountId, date])
+  @@map("transactions")
+}
+
+/// Daily balance snapshot per account -> powers net-worth-over-time.
+model BalanceSnapshot {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  current   Decimal? @db.Decimal(20, 4)
+  available Decimal? @db.Decimal(20, 4)
+
+  @@unique([accountId, date])
+  @@map("balance_snapshots")
+}
+
+/// Per-user dashboard preferences ("choose what to show").
+model DashboardConfig {
+  userId    String   @id @map("user_id") @db.Uuid
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  config    Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dashboard_configs")
+}
+
+/// Raw webhook audit + idempotency.
+model WebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  itemId      String?  @map("item_id")
+  webhookType String   @map("webhook_type")
+  webhookCode String   @map("webhook_code")
+  payload     Json
+  receivedAt  DateTime @default(now()) @map("received_at")
+
+  @@map("webhook_events")
+}
