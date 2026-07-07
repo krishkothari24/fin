@@ -11,7 +11,8 @@
     "test": "jest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "e2e:sandbox": "ts-node scripts/sandbox-e2e.ts"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"
