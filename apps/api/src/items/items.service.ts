@@ -3,6 +3,7 @@ import { AccountBase } from "plaid";
 import { CryptoService } from "../crypto/crypto.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { PlaidService } from "../plaid/plaid.service";
+import { QueueService } from "../sync/queue.service";
 import { mapPlaidAccount } from "./account.mapper";
 
 /**
@@ -18,6 +19,7 @@ export class ItemsService {
     private readonly plaid: PlaidService,
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly queue: QueueService,
   ) {}
 
   /** Create a link_token for a brand-new connection. */
@@ -47,7 +49,8 @@ export class ItemsService {
     const accounts = await this.plaid.getAccounts(accessToken);
     await this.storeAccounts(item.id, accounts);
 
-    // Phase 3 will enqueue the initial /transactions/sync here.
+    // Kick off the initial transaction pull in the background (Phase 3).
+    await this.queue.enqueueSync(item.id);
     return { itemId: item.id, institutionName, accountsConnected: accounts.length };
   }
 

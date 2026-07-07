@@ -5,6 +5,7 @@ import { CryptoModule } from "./crypto/crypto.module";
 import { AuthModule } from "./auth/auth.module";
 import { HealthModule } from "./health/health.module";
 import { ItemsModule } from "./items/items.module";
+import { SyncModule } from "./sync/sync.module";
 
 @Module({
   imports: [
@@ -14,8 +15,8 @@ import { ItemsModule } from "./items/items.module";
     AuthModule,
     HealthModule,
     ItemsModule,
-    // Phase 3+: SyncModule (webhooks + jobs), AccountsModule, TransactionsModule,
-    // AggregationsModule, DashboardModule.
+    SyncModule,
+    // Phase 4+: AccountsModule, TransactionsModule, AggregationsModule, DashboardModule.
   ],
 })
 export class AppModule {}

@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "e2e:sandbox": "ts-node scripts/sandbox-e2e.ts"
+    "e2e:sandbox": "ts-node scripts/sandbox-e2e.ts",
+    "e2e:sync": "ts-node scripts/sync-e2e.ts"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

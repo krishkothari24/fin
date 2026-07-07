@@ -4,9 +4,12 @@ import {
   AccountBase,
   Configuration,
   CountryCode,
+  JWKPublicKey,
   PlaidApi,
   PlaidEnvironments,
   Products,
+  SandboxItemFireWebhookRequestWebhookCodeEnum,
+  TransactionsSyncResponse,
 } from "plaid";
 
 /**
@@ -92,6 +95,36 @@ export class PlaidService {
 
   async removeItem(accessToken: string): Promise<void> {
     await this.client.itemRemove({ access_token: accessToken });
+  }
+
+  /**
+   * One page of `/transactions/sync`. Pass the saved cursor (undefined on the
+   * first call) and loop while `has_more` is true, persisting `next_cursor`.
+   */
+  async transactionsSync(
+    accessToken: string,
+    cursor?: string,
+  ): Promise<TransactionsSyncResponse> {
+    const res = await this.client.transactionsSync({
+      access_token: accessToken,
+      cursor,
+      count: 500,
+    });
+    return res.data;
+  }
+
+  /** Fetch the public key Plaid signed a webhook JWT with (verified in WebhookVerificationService). */
+  async getWebhookVerificationKey(keyId: string): Promise<JWKPublicKey> {
+    const res = await this.client.webhookVerificationKeyGet({ key_id: keyId });
+    return res.data.key;
+  }
+
+  /** Sandbox-only: make Plaid POST a webhook to our configured URL (for testing the pipeline). */
+  async sandboxFireWebhook(
+    accessToken: string,
+    code: SandboxItemFireWebhookRequestWebhookCodeEnum = SandboxItemFireWebhookRequestWebhookCodeEnum.SyncUpdatesAvailable,
+  ): Promise<void> {
+    await this.client.sandboxItemFireWebhook({ access_token: accessToken, webhook_code: code });
   }
 
   /** Sandbox-only: mint a public_token without the frontend Link flow (for tests). */
