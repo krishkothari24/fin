@@ -1,9 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Job, PgBoss } from "pg-boss";
+import { SnapshotService } from "./snapshot.service";
 import { SyncService } from "./sync.service";
 
 export const SYNC_QUEUE = "sync-item";
+export const SNAPSHOT_QUEUE = "snapshot-balances";
+/** Daily at 06:00 UTC — cheap and off-peak. */
+const SNAPSHOT_CRON = "0 6 * * *";
 
 interface SyncJob {
   itemId: string;
@@ -26,6 +30,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly config: ConfigService,
     private readonly sync: SyncService,
+    private readonly snapshot: SnapshotService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -43,6 +48,8 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       this.boss = new PgBoss({ connectionString, schema: "pgboss", max: 4 });
       this.boss.on("error", (e) => this.logger.error(`pg-boss error: ${String(e)}`));
       await this.boss.start();
+
+      // Transaction syncs (enqueued on connect + webhook).
       await this.boss.createQueue(SYNC_QUEUE);
       await this.boss.work<SyncJob>(SYNC_QUEUE, async (jobs: Job<SyncJob>[]) => {
         for (const job of jobs) {
@@ -50,8 +57,18 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
           await this.sync.syncItem(job.data.itemId);
         }
       });
+
+      // Daily balance snapshots (cron -> net-worth-over-time).
+      await this.boss.createQueue(SNAPSHOT_QUEUE);
+      await this.boss.work(SNAPSHOT_QUEUE, async () => {
+        await this.snapshot.snapshotAllBalances();
+      });
+      await this.boss.schedule(SNAPSHOT_QUEUE, SNAPSHOT_CRON);
+
       this.ready = true;
-      this.logger.log(`pg-boss started; worker listening on '${SYNC_QUEUE}'`);
+      this.logger.log(
+        `pg-boss started; workers on '${SYNC_QUEUE}' + '${SNAPSHOT_QUEUE}' (daily ${SNAPSHOT_CRON})`,
+      );
     } catch (err) {
       this.logger.warn(`pg-boss failed to start; job queue disabled: ${String(err)}`);
     }

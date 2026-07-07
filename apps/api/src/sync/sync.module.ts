@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { PlaidModule } from "../plaid/plaid.module";
 import { PlaidWebhookController } from "./plaid-webhook.controller";
 import { QueueService } from "./queue.service";
+import { SnapshotService } from "./snapshot.service";
 import { SyncService } from "./sync.service";
 import { WebhookVerificationService } from "./webhook-verification.service";
 
@@ -13,7 +14,7 @@ import { WebhookVerificationService } from "./webhook-verification.service";
 @Module({
   imports: [PlaidModule],
   controllers: [PlaidWebhookController],
-  providers: [SyncService, QueueService, WebhookVerificationService],
-  exports: [SyncService, QueueService],
+  providers: [SyncService, QueueService, WebhookVerificationService, SnapshotService],
+  exports: [SyncService, QueueService, SnapshotService],
 })
 export class SyncModule {}

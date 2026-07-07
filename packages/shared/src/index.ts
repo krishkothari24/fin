@@ -55,6 +55,22 @@ export interface CategorySpendDto {
   amount: string;
 }
 
+/** One month of cash flow. `net` = income - outflow (both non-negative). */
+export interface CashFlowPointDto {
+  month: string; // YYYY-MM
+  income: string; // money in  (Plaid amount < 0, sign flipped)
+  outflow: string; // money out (Plaid amount > 0)
+  net: string;
+}
+
+/** A page of transactions (offset pagination). */
+export interface TransactionsPage {
+  transactions: TransactionDto[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ---- dashboard config ("choose what to show") --------------------------
 
 export type WidgetId =
@@ -64,6 +80,16 @@ export type WidgetId =
   | "recent_transactions"
   | "cash_flow"
   | "recurring";
+
+/** Runtime list of every WidgetId (for validation). Keep in sync with WidgetId. */
+export const WIDGET_IDS: WidgetId[] = [
+  "net_worth",
+  "accounts",
+  "spending_by_category",
+  "recent_transactions",
+  "cash_flow",
+  "recurring",
+];
 
 export interface DashboardConfig {
   widgets: Array<{ id: WidgetId; enabled: boolean; order: number }>;

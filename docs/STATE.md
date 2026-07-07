@@ -1,6 +1,6 @@
 # fin-dashboard — Technical State of the Application
 
-_Snapshot as of 2026-07-07 · Phases 1–3 complete (Phase 3 built on top of commit `d571815`, not yet committed)_
+_Snapshot as of 2026-07-07 · Phases 1–5 complete (Phase 5 not yet committed)_
 
 This document is the ground-truth of **what exists, how it works, and why** — written
 to be read end-to-end by someone who has never touched Prisma, Plaid, or NestJS. It is
@@ -34,16 +34,16 @@ scripted Plaid Sandbox runs, not a browser.
 
 ## 2. Where we are right now (phase status)
 
-The build is organized into 6 phases. We have finished 2 of them.
+The build is organized into 6 phases. We have finished 5 of them.
 
 | Phase | Scope | Status |
 |------:|-------|--------|
 | **1** | Foundation: monorepo, NestJS app, Prisma schema + migration, env validation, auth guard, health check | ✅ **done** |
 | **2** | Plaid Link + Item lifecycle: connect an institution, encrypt & store the token, list / refresh / remove | ✅ **done, verified live** |
 | **3** | Sync pipeline: webhooks + `/transactions/sync` + background jobs (pull actual transactions) | ✅ **done, verified live** |
-| 4 | Read & aggregation API: accounts, transactions, net worth, spending, cash flow | ⏭️ **next** |
-| 5 | Dashboard config: per-user "choose what to show" | ⬜ not started |
-| 6 | Hardening: RLS policies, rate limiting, logging, Sentry, request Plaid Production | ⬜ not started |
+| **4** | Read & aggregation API: accounts, transactions, net worth, spending, cash flow | ✅ **done, verified live** |
+| **5** | Dashboard config + daily balance snapshots (net-worth-over-time) | ✅ **done, verified live** |
+| 6 | Hardening: RLS policies, rate limiting, logging, Sentry, request Plaid Production | ⏭️ **next** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -58,9 +58,22 @@ accounts — driven by the background pg-boss worker _and_ a direct call at the 
 converging to exactly 48 (idempotency proven). Cursor + `last_synced_at` persist; a re-sync
 adds nothing; removing the item cascade-deletes its transactions. See §16.
 
-**What does _not_ exist yet:** the read/aggregation endpoints. We store accounts, balances, and
-transactions, but there's no `GET /transactions`, and no net-worth / spending / cash-flow — that's
-Phase 4. Also: RLS, real Supabase login wiring, and Plaid Production are Phase 6.
+**Phase 4 (verified live):** the read & aggregation API is up. The E2E connected the sandbox
+bank, synced 48 transactions, then proved the numbers: net worth = **assets − liabilities**
+(cross-checked against a raw sum), hiding an account (Plaid 401k, 23631.98) dropped assets by
+exactly that amount, spending-by-category summed to the raw positive-amount total across 8
+categories, and cash-flow's `net = income − outflow` held every month. See §17.
+
+**Phase 5 (verified live):** per-user dashboard config ("choose what to show") + the daily
+balance-snapshot job. The E2E round-tripped a config through the `dashboard_configs` JSONB,
+then snapshotted 12 accounts and confirmed the net-worth **series is now non-empty** — today's
+point (`−40452.32`) equals the current net worth exactly, and re-snapshotting doesn't duplicate.
+See §18.
+
+**What does _not_ exist yet (Phase 6 — hardening):** Postgres **RLS** policies (the second
+isolation layer), rate limiting, structured logging + Sentry, wiring real **Supabase login**,
+and requesting Plaid **Production** access. Also un-tested end-to-end: real webhook *delivery*
+(needs a public URL/tunnel — §16.6).
 
 ---
 
@@ -219,7 +232,7 @@ webhook_events   (standalone audit log)
 | **plaid_items** | one connected institution | The sensitive table. Holds `access_token_ciphertext` (encrypted, never plaintext), `plaid_item_id` (unique), `institution_name`, `status` (`good`/`login_required`/`error`), and `transactions_cursor` (Phase 3 uses this). |
 | **accounts** | one account inside an institution | e.g. a checking account. `current_balance` / `available_balance` are `DECIMAL(20,4)` (never float — see below). `is_hidden` is the user's "don't show this" choice. |
 | **transactions** | one transaction | `plaid_transaction_id` unique. **`amount` follows Plaid's sign convention: positive = money _out_ of the account.** `pfc_primary`/`pfc_detailed` are Plaid's categories. Indexed on `(account_id, date)` for fast date-range queries. **Empty until Phase 3.** |
-| **balance_snapshots** | one account's balance on one day | Powers net-worth-over-time without any AI: a daily job (Phase 5) writes one row per account per day. Unique on `(account_id, date)`. |
+| **balance_snapshots** | one account's balance on one day | Powers net-worth-over-time without any AI: a daily job (Phase 5, §18.2) writes one row per account per day. Unique on `(account_id, date)`. |
 | **dashboard_configs** | one user's preferences | `config` is a JSON blob: which widgets, their order, hidden accounts, default range. This _is_ "choose what to show." One row per user. |
 | **webhook_events** | one webhook Plaid sent us | Raw audit + idempotency for Phase 3. |
 
@@ -427,11 +440,15 @@ shapes the API returns, importable by the future frontend so both sides agree. H
 - `DashboardConfig` + `DEFAULT_DASHBOARD_CONFIG` — the "choose what to show" model: a list of
   widgets (`net_worth`, `accounts`, `spending_by_category`, `recent_transactions`,
   `cash_flow`, `recurring`) with `enabled` + `order`, plus `hiddenAccountIds`,
-  `defaultRangeDays`, and `currency`. This is the default a brand-new user gets. It's typed and
-  shared now, but the endpoints that read/write it are Phase 5.
+  `defaultRangeDays`, and `currency`. This is the default a brand-new user gets, served by the
+  `/dashboard/config` endpoints as of Phase 5 (§18.1).
 
-Note these are currently _defined_ and shared, but only `ItemStatus`-like pieces are used by
-running code so far; the DTOs come alive in Phase 4.
+As of Phase 4 the response DTOs (`AccountDto`, `TransactionDto`, `NetWorthDto`,
+`CategorySpendDto`, plus `CashFlowPointDto` and `TransactionsPage`) are what the read endpoints
+actually return, mapped from Prisma rows by the pure functions in `account.dto.ts` /
+`transaction.dto.ts`. As of Phase 5, `DashboardConfig` + `DEFAULT_DASHBOARD_CONFIG` (and the
+`WIDGET_IDS` runtime list used to validate incoming configs) back the real `/dashboard/config`
+endpoints.
 
 ---
 
@@ -473,9 +490,16 @@ except health):
 | `POST /api/items/:id/refresh` | re-pull balances for that item |
 | `DELETE /api/items/:id` | Plaid `/item/remove` + purge local rows |
 | `POST /api/plaid/webhook` | **public, signature-verified**; on `SYNC_UPDATES_AVAILABLE` enqueues a sync (Phase 3) |
+| `GET  /api/accounts` | list the user's accounts (with institution + balances) |
+| `PATCH /api/accounts/:id` | hide/show or rename an account |
+| `GET  /api/transactions` | filter (date/account/category/search) + paginate |
+| `GET  /api/aggregations/net-worth` | assets − liabilities (`?series=true` for the timeseries) |
+| `GET  /api/aggregations/spending` | spending by category (date-range) |
+| `GET  /api/aggregations/cash-flow` | income vs outflow per month (date-range) |
+| `GET  /api/dashboard/config` | the user's saved dashboard config (or defaults) |
+| `PUT  /api/dashboard/config` | save the dashboard config (validated) |
 
-**Not built:** the read/aggregation endpoints (`GET /accounts`, `GET /transactions`,
-net-worth/spending/cash-flow) — that's Phase 4.
+**Not built (Phase 6):** no new endpoints — hardening only (RLS, rate limiting, logging).
 
 ---
 
@@ -501,11 +525,13 @@ pnpm --filter @fin/api prisma:migrate    # create + apply a new migration (touch
 pnpm --filter @fin/api prisma:deploy     # apply existing migrations (prod/deploy)
 
 # --- Unit tests (Jest) ---
-pnpm --filter @fin/api test              # crypto + account.mapper + transaction.mapper (9 tests)
+pnpm --filter @fin/api test              # mappers + DTOs (12 tests)
 
 # --- Live Plaid Sandbox end-to-end ---
 pnpm --filter @fin/api e2e:sandbox       # Phase 2: connect → verify encrypted → remove
 pnpm --filter @fin/api e2e:sync          # Phase 3: connect → /transactions/sync → verify → idempotency → purge
+pnpm --filter @fin/api e2e:read          # Phase 4: seed → accounts/transactions/aggregations invariants → purge
+pnpm --filter @fin/api e2e:dashboard     # Phase 5: config round-trip + snapshot → non-empty net-worth series → purge
 ```
 
 **What's tested automatically:**
@@ -514,7 +540,8 @@ pnpm --filter @fin/api e2e:sync          # Phase 3: connect → /transactions/sy
 - `account.mapper.spec.ts` — Plaid account → DB row mapping.
 - `transaction.mapper.spec.ts` — Plaid transaction → DB row (amount precision, date parsing,
   missing optionals).
-- `sandbox-e2e.ts` / `sync-e2e.ts` — the live integration paths (need a real `.env`).
+- `account.dto.spec.ts` / `transaction.dto.spec.ts` — Prisma row → API DTO (decimals→strings, date format).
+- `sandbox-e2e.ts` / `sync-e2e.ts` / `read-e2e.ts` — the live integration paths (need a real `.env`).
 
 ---
 
@@ -540,18 +567,19 @@ Template lives in [.env.example](../apps/api/.env.example); real values go in
 
 ---
 
-## 14. What's next (Phase 4 — read & aggregation API)
+## 14. What's next (Phase 6 — hardening & prod readiness)
 
-Phase 3 filled the `transactions` table; Phase 4 exposes it:
+The feature build is done (Phases 1–5). Phase 6 is about making it safe to expose:
 
-1. `GET /api/accounts` (+ `PATCH` to hide/rename) and `GET /api/transactions` with date-range,
-   account, category, search, and pagination filters.
-2. `GET /api/aggregations/net-worth` (total + timeseries from `balance_snapshots`),
-   `/spending` (by category / month), `/cash-flow` (income vs outflow).
-3. All aggregations must exclude `is_hidden` accounts and respect Plaid's sign convention
-   (spending = amount > 0, inflow = amount < 0).
+1. **Postgres RLS** policies on every user table — the second isolation layer behind the
+   app-level `userId` scoping (§9). Test with two users.
+2. **Rate limiting** (e.g. `@nestjs/throttler`) and **structured logging** + **Sentry**.
+3. Wire **real Supabase login** (the `SUPABASE_*` keys) so JWTs come from actual sign-ups.
+4. **Webhook delivery** end-to-end: point `PLAID_WEBHOOK_URL` at a tunnel/deploy and verify a
+   real `SYNC_UPDATES_AVAILABLE` round-trip (§16.6).
+5. Request **Plaid Production** access; deploy the web service + worker (e.g. Render).
 
-These are plain read endpoints over data we already have — no new Plaid calls, no queue.
+Fast-follows after that: Plaid Recurring Transactions, Investments, Liabilities.
 
 ---
 
@@ -659,3 +687,100 @@ against Supabase + Sandbox by [sync-e2e.ts](../apps/api/scripts/sync-e2e.ts). Th
 path** is built and typechecked, but Plaid can only _deliver_ a real signed webhook to a public
 URL — so end-to-end webhook delivery needs `PLAID_WEBHOOK_URL` pointed at a tunnel (or a deploy).
 `sandbox/item/fire_webhook` triggers a real delivery once such a URL exists.
+
+---
+
+## 17. Phase 4 in depth — read & aggregation API
+
+Three modules, all **plain reads** over data we already have — no Plaid calls, no queue. Each
+is user-scoped by the auth guard, and money crosses the wire as **strings** (§6).
+
+### 17.1 The two invariants every endpoint respects
+
+1. **Hidden accounts are excluded** from aggregations. `is_hidden` is the user's "don't count
+   this" switch (set via `PATCH /accounts/:id`); every aggregation query filters `isHidden: false`.
+2. **Plaid's sign convention.** A transaction `amount > 0` is money **out** (spending); `< 0` is
+   money **in** (income). Get this backwards and every number inverts — so it's asserted in the E2E.
+
+### 17.2 Accounts — [accounts/](../apps/api/src/accounts/)
+
+`GET /accounts` lists the user's accounts joined to their institution name; `PATCH /accounts/:id`
+hides/shows or renames one (ownership checked via `item: { userId }` before the update). Prisma
+`Decimal` balances become strings in the pure mapper [account.dto.ts](../apps/api/src/accounts/account.dto.ts).
+
+### 17.3 Transactions — [transactions/](../apps/api/src/transactions/)
+
+`GET /transactions` filters on date range, account, category (`pfc_primary`), a case-insensitive
+search over name/merchant, and `pending`, then offset-paginates (`limit` ≤ 200, default 50)
+newest-first. Returns `{ transactions, total, limit, offset }`. The query DTO is validated by
+class-validator; the global `ValidationPipe` (`forbidNonWhitelisted`) rejects unknown params.
+
+### 17.4 Aggregations — [aggregations/](../apps/api/src/aggregations/)
+
+- **Net worth** = `assets − liabilities`, where assets = Σ balances of `depository`+`investment`
+  accounts and liabilities = Σ balances of `credit`+`loan` accounts (both via Prisma `aggregate`,
+  math in `Prisma.Decimal` for exactness). `?series=true` adds the daily timeseries — a raw SQL
+  join over `balance_snapshots`, populated daily as of Phase 5 (§18.2).
+- **Spending** groups non-pending, `amount > 0` transactions by `pfc_primary` (Prisma `groupBy`),
+  largest first.
+- **Cash flow** is a raw SQL query bucketing by `date_trunc('month', date)`, summing income
+  (`amount < 0`, flipped) and outflow (`amount > 0`) per month; `net = income − outflow`.
+
+Why raw SQL for two of these: grouping by a *derived* month and doing conditional sign-sums is
+awkward in the Prisma query API but trivial in SQL. Both raw queries are parameterized
+(`${userId}::uuid`) — no string interpolation — and join through `plaid_items` so they're strictly
+user-scoped.
+
+### 17.5 What the live E2E proved
+
+[read-e2e.ts](../apps/api/scripts/read-e2e.ts) seeded 48 real sandbox transactions, then checked
+the numbers rather than just "200 OK": `netWorth == assets − liabilities` and assets matched an
+independent raw sum; **hiding** the Plaid 401k (23631.98) dropped assets by exactly that;
+spending-by-category summed to the raw positive-amount total (8 categories); and cash-flow's
+`net == income − outflow` held for all 3 months.
+
+---
+
+## 18. Phase 5 in depth — dashboard config + balance snapshots
+
+Two pieces: the user's "choose what to show" preferences, and the daily job that makes
+net-worth-over-time real.
+
+### 18.1 Dashboard config — [dashboard/](../apps/api/src/dashboard/)
+
+`GET /dashboard/config` returns the user's saved config, or `DEFAULT_DASHBOARD_CONFIG` if they
+have none (or the stored blob is malformed). `PUT /dashboard/config` validates the body against
+a class-validator DTO — every widget `id` must be one of `WIDGET_IDS`, `hiddenAccountIds` must be
+UUIDs, `defaultRangeDays` 1–365, `currency` a 3-char code — then upserts it into the
+`dashboard_configs` JSONB (creating the `profiles` row first, since it's an FK target).
+
+**Two independent "hide" mechanisms — don't confuse them:**
+- `Account.is_hidden` (a real column, set via `PATCH /accounts/:id`) → **excluded from
+  aggregation math** (net worth, spending). This is what §17.1 enforces.
+- `DashboardConfig.hiddenAccountIds` (inside the JSON blob) → a **visual dashboard preference**
+  (which account cards to collapse). It does **not** change any totals.
+
+**jsonb note:** Postgres reorders object keys in `jsonb`, so a config read back has the same
+*values* but not the same key *order* as what you sent. That's fine for a JSON API (clients read
+by key) — the E2E compares structurally, not by string, for exactly this reason.
+
+### 18.2 Balance snapshots — [snapshot.service.ts](../apps/api/src/sync/snapshot.service.ts)
+
+`SnapshotService.snapshotAllBalances()` writes one `balance_snapshots` row per account for
+*today* (current + available balance), **upserting** on the unique `(account_id, date)` — so
+running it twice a day just updates today's row (idempotent, proven in the E2E). It snapshots the
+balances already stored on each account (kept fresh by every transaction sync), so it makes **no
+Plaid calls**.
+
+These rows are what the net-worth **series** (§17.4) reads: before Phase 5 that query returned
+nothing; now each day adds a point, and the E2E confirmed today's point equals the current
+net worth to the cent.
+
+### 18.3 How it's scheduled (pg-boss cron)
+
+[queue.service.ts](../apps/api/src/sync/queue.service.ts) registers a second queue,
+`snapshot-balances`, with a worker that runs the snapshot, and schedules it **daily at 06:00 UTC**
+via pg-boss's built-in cron (`boss.schedule`). pg-boss persists the schedule in Postgres and
+fires it once cluster-wide, so it survives restarts and won't double-run across instances. The
+E2E calls `snapshotAllBalances()` directly (you can't wait a day in a test); the cron just
+automates that same call.
