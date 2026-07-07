@@ -4,6 +4,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { CryptoModule } from "./crypto/crypto.module";
 import { AuthModule } from "./auth/auth.module";
 import { HealthModule } from "./health/health.module";
+import { ItemsModule } from "./items/items.module";
 
 @Module({
   imports: [
@@ -12,8 +13,9 @@ import { HealthModule } from "./health/health.module";
     CryptoModule,
     AuthModule,
     HealthModule,
-    // Phase 2+: PlaidModule, ItemsModule, AccountsModule, TransactionsModule,
-    // SyncModule, AggregationsModule, DashboardModule.
+    ItemsModule,
+    // Phase 3+: SyncModule (webhooks + jobs), AccountsModule, TransactionsModule,
+    // AggregationsModule, DashboardModule.
   ],
 })
 export class AppModule {}
