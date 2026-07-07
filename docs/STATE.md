@@ -1,6 +1,6 @@
 # fin-dashboard — Technical State of the Application
 
-_Snapshot as of 2026-07-07 · Phases 1–5 complete (Phase 5 not yet committed)_
+_Snapshot as of 2026-07-07 · Phases 1–6 complete (Phases 4–6 not yet committed) · security → [SECURITY.md](./SECURITY.md)_
 
 This document is the ground-truth of **what exists, how it works, and why** — written
 to be read end-to-end by someone who has never touched Prisma, Plaid, or NestJS. It is
@@ -43,7 +43,7 @@ The build is organized into 6 phases. We have finished 5 of them.
 | **3** | Sync pipeline: webhooks + `/transactions/sync` + background jobs (pull actual transactions) | ✅ **done, verified live** |
 | **4** | Read & aggregation API: accounts, transactions, net worth, spending, cash flow | ✅ **done, verified live** |
 | **5** | Dashboard config + daily balance snapshots (net-worth-over-time) | ✅ **done, verified live** |
-| 6 | Hardening: RLS policies, rate limiting, logging, Sentry, request Plaid Production | ⏭️ **next** |
+| **6** | Hardening: RLS, rate limiting, structured logging, sanitized errors, helmet/CORS, Sentry | ✅ **done, verified live** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -70,10 +70,16 @@ then snapshotted 12 accounts and confirmed the net-worth **series is now non-emp
 point (`−40452.32`) equals the current net worth exactly, and re-snapshotting doesn't duplicate.
 See §18.
 
-**What does _not_ exist yet (Phase 6 — hardening):** Postgres **RLS** policies (the second
-isolation layer), rate limiting, structured logging + Sentry, wiring real **Supabase login**,
-and requesting Plaid **Production** access. Also un-tested end-to-end: real webhook *delivery*
-(needs a public URL/tunnel — §16.6).
+**Phase 6 (verified live):** the app is hardened for exposure — Postgres **RLS** (second
+isolation layer, proven with a two-user DB-level isolation test), per-IP **rate limiting**,
+**helmet** headers + CORS allowlist, a **sanitizing exception filter** (no stack/SQL leaks),
+structured request logging with correlation ids, and **Sentry** (gated on `SENTRY_DSN`). See
+§19 and [SECURITY.md](./SECURITY.md).
+
+**What still needs _you_ (human-in-the-loop, not code):** requesting Plaid **Production**
+access, a public webhook URL/tunnel for real webhook *delivery* (§16.6), turning on Sentry with
+a DSN, and the production **deploy** (Render). These are enumerated in
+[SECURITY.md](./SECURITY.md) → "Go-to-production checklist."
 
 ---
 
@@ -412,9 +418,12 @@ are already in place:
    `requireItem(userId, itemId)` does `findFirst({ where: { id: itemId, userId } })` — so
    asking for someone else's item id returns "not found," never their data.
 
-4. **Per-user isolation, layer 2 (database RLS) — planned Phase 6.** Postgres Row-Level
-   Security will be the backstop: even if application code had a bug, the database itself would
-   refuse cross-user reads. Not enabled yet.
+4. **Per-user isolation, layer 2 (database RLS) — live as of Phase 6 (§19.1).** Postgres
+   Row-Level Security now locks the *direct* database surface: under the Supabase
+   `authenticated` role a user can read only their own rows and cannot write at all. The API
+   connects as the owner (which bypasses RLS by design), so this is defense-in-depth around the
+   app-level gate, not a replacement for it. See [SECURITY.md](./SECURITY.md) for exactly what it
+   does and doesn't cover.
 
 5. **Secrets never in git or chat.** `.env` is gitignored; only `.env.example` (blank
    placeholders) is committed. `git status` is clean and `node_modules`/`.env` are never
@@ -499,7 +508,9 @@ except health):
 | `GET  /api/dashboard/config` | the user's saved dashboard config (or defaults) |
 | `PUT  /api/dashboard/config` | save the dashboard config (validated) |
 
-**Not built (Phase 6):** no new endpoints — hardening only (RLS, rate limiting, logging).
+**Phase 6 added no new endpoints — hardening only** (RLS, rate limiting, logging, sanitized
+errors, helmet/CORS). Every route above now runs behind the global rate limiter and returns the
+sanitized error shape on failure; `link-token`/`exchange` carry a tighter per-IP cap. See §19.
 
 ---
 
@@ -532,6 +543,8 @@ pnpm --filter @fin/api e2e:sandbox       # Phase 2: connect → verify encrypted
 pnpm --filter @fin/api e2e:sync          # Phase 3: connect → /transactions/sync → verify → idempotency → purge
 pnpm --filter @fin/api e2e:read          # Phase 4: seed → accounts/transactions/aggregations invariants → purge
 pnpm --filter @fin/api e2e:dashboard     # Phase 5: config round-trip + snapshot → non-empty net-worth series → purge
+pnpm --filter @fin/api e2e:rls           # Phase 6: two-user RLS isolation via the authenticated role → purge
+pnpm --filter @fin/api e2e:hardening     # Phase 6: HTTP headers, sanitized errors, 429 rate limit, skip-throttle
 ```
 
 **What's tested automatically:**
@@ -567,19 +580,21 @@ Template lives in [.env.example](../apps/api/.env.example); real values go in
 
 ---
 
-## 14. What's next (Phase 6 — hardening & prod readiness)
+## 14. What's next (post Phase 6)
 
-The feature build is done (Phases 1–5). Phase 6 is about making it safe to expose:
+The whole backend build is done (Phases 1–6, §19). What remains is **not code** — it needs your
+accounts/infra, and is enumerated in [SECURITY.md](./SECURITY.md) → "Go-to-production checklist":
 
-1. **Postgres RLS** policies on every user table — the second isolation layer behind the
-   app-level `userId` scoping (§9). Test with two users.
-2. **Rate limiting** (e.g. `@nestjs/throttler`) and **structured logging** + **Sentry**.
-3. Wire **real Supabase login** (the `SUPABASE_*` keys) so JWTs come from actual sign-ups.
-4. **Webhook delivery** end-to-end: point `PLAID_WEBHOOK_URL` at a tunnel/deploy and verify a
+1. Request **Plaid Production** access (Sandbox → Production is just `PLAID_ENV` + keys).
+2. **Webhook delivery** end-to-end: point `PLAID_WEBHOOK_URL` at a tunnel/deploy and verify a
    real `SYNC_UPDATES_AVAILABLE` round-trip (§16.6).
-5. Request **Plaid Production** access; deploy the web service + worker (e.g. Render).
+3. Turn on **Sentry** (set `SENTRY_DSN`) and **deploy** the web service + worker (e.g. Render,
+   with `TRUST_PROXY=1`, `CORS_ORIGINS`, secrets in host env).
+4. Wire **real Supabase login** on a frontend so JWTs come from actual sign-ups (the guard
+   already verifies them; there's just no UI yet).
 
-Fast-follows after that: Plaid Recurring Transactions, Investments, Liabilities.
+Fast-follows / future product: Plaid Recurring Transactions, Investments, Liabilities, and the
+`apps/web` frontend the monorepo is structured for.
 
 ---
 
@@ -596,7 +611,7 @@ Fast-follows after that: Plaid Recurring Transactions, Investments, Liabilities.
 - **PFC** — `personal_finance_category`, Plaid's own category for a transaction
   (`pfc_primary` / `pfc_detailed`). This is why we need no AI to categorize.
 - **RLS** — Row-Level Security, a Postgres feature that filters rows by policy at the database
-  level. Our planned second isolation layer.
+  level. Our second isolation layer, live as of Phase 6 (§19.1).
 - **pooler / port 6543 vs direct / port 5432** — see §7.5 and §8.
 - **P1001** — Prisma's "can't reach database" error. In our dev shell it usually means the
   sandbox blocked Prisma's engine subprocess, _not_ a real DB problem (§8).
@@ -784,3 +799,101 @@ via pg-boss's built-in cron (`boss.schedule`). pg-boss persists the schedule in 
 fires it once cluster-wide, so it survives restarts and won't double-run across instances. The
 E2E calls `snapshotAllBalances()` directly (you can't wait a day in a test); the cron just
 automates that same call.
+
+---
+
+## 19. Phase 6 in depth — hardening & prod readiness
+
+The feature build was done at Phase 5; Phase 6 adds the layers that make the API safe to expose
+on the public internet. Nothing here changes what the endpoints return — it changes what happens
+around them. Full rationale + threat table live in [SECURITY.md](./SECURITY.md); this section is
+the mechanics.
+
+### 19.1 Row-Level Security (RLS) — the second isolation layer
+
+Layer 1 (already there) is the API: every user route is behind `SupabaseJwtGuard`, and every
+service scopes queries by `userId`. Layer 2 is now the **database itself**.
+
+Migration [`20260707120000_phase6_rls`](../apps/api/prisma/migrations/20260707120000_phase6_rls/migration.sql):
+
+- `ENABLE ROW LEVEL SECURITY` on all seven tables. With RLS on and no policy, non-owner roles
+  see **nothing** (deny by default).
+- For the Supabase `authenticated` role: a `SELECT` policy per user table keyed on `auth.uid()`
+  (= the JWT `sub`). Child tables (`accounts`, `transactions`, `balance_snapshots`) join up
+  through `plaid_items` to reach the owner. **No** write grants → the direct path is read-only.
+- `plaid_items` grants **column-level** SELECT that **excludes** `access_token_ciphertext`, so
+  the encrypted token is invisible even to its owner via that path. `webhook_events` gets no
+  grant/policy at all → invisible.
+- The Supabase-specific bits (the `authenticated` role, `auth.uid()`) run inside a
+  `DO $$ … IF EXISTS (… rolname='authenticated') … $$` guard, so the same migration also applies
+  cleanly to a plain local/CI Postgres.
+
+**The key subtlety:** the API connects as the table **owner**, and an owner **bypasses RLS**
+unless the table is set to `FORCE ROW LEVEL SECURITY` — which we deliberately do **not** do. So
+RLS does **not** touch the app's own queries (the read/aggregation E2Es pass unchanged). RLS
+here protects the *direct* database surface — anyone using the Supabase `anon`/`authenticated`
+keys (PostgREST, `supabase-js`, a leaked key). To also make RLS a backstop against an API bug,
+you'd `FORCE` it and `SET LOCAL app.user_id` per request as a non-owner role — the trade-off is
+spelled out in SECURITY.md.
+
+**Proof** — `pnpm --filter @fin/api e2e:rls` seeds two users, then, impersonating the
+`authenticated` role for user B (`SET LOCAL ROLE authenticated` + a JWT-claims GUC), asserts B
+sees exactly its own 1 account / 1 item / 1 txn, cannot select the token column, and cannot see
+`webhook_events` — while the owner still sees everything.
+
+### 19.2 Rate limiting
+
+`@nestjs/throttler` with a global `ThrottlerGuard` ([app.module.ts](../apps/api/src/app.module.ts)),
+per-IP, in-memory, env-tuned (`RATE_LIMIT_LIMIT` per `RATE_LIMIT_TTL` seconds, default 120/60s).
+Because it's a **global** guard it runs *ahead* of the per-route `SupabaseJwtGuard`, so a flood is
+rejected with 429 before it even reaches auth. `@SkipThrottle()` exempts the health check and the
+Plaid webhook (Plaid controls delivery + legitimately retries — signature verification guards it,
+not rate limiting). `@Throttle({ default: { limit: 15, ttl: 60_000 } })` puts a tighter cap on
+`link-token`/`exchange`, which hit Plaid on every call. In-memory is correct for a single
+instance; horizontal scale-out would want a shared store.
+
+### 19.3 Structured logging + request correlation
+
+[observability/](../apps/api/src/observability/):
+
+- `request-context.ts` — an `AsyncLocalStorage` store holding `{ requestId, userId }`, so any
+  layer can attach them to a log line without threading them through calls.
+- `request-context.middleware.ts` — registered **first** (as plain Express middleware in
+  [bootstrap.ts](../apps/api/src/bootstrap.ts), so it wraps everything). It assigns/echoes an
+  `x-request-id`, opens the ALS scope, and on `res.on("finish")` writes **one** access-log line
+  with method/path/status/durationMs/userId — capturing the *final* status for every response,
+  including 401/429/404 that never reach a controller.
+- `structured-logger.ts` — dependency-free: emits JSON lines (prod, or `LOG_JSON=true`) or pretty
+  lines (dev), request id folded in from ALS.
+
+### 19.4 Sanitizing exception filter
+
+`all-exceptions.filter.ts` (global via `APP_FILTER`) is the single place errors become HTTP
+responses. Deliberate 4xx (`HttpException`) pass through with their message. **Anything else** is
+an unexpected 500: the full error + stack is logged server-side and sent to Sentry, but the client
+gets only `{ statusCode: 500, error, message: "Something went wrong…", requestId, path }` — no
+stack, SQL, or Prisma internals leak. Every error body carries the `requestId` so a user report
+maps to a server log line.
+
+### 19.5 Sentry, helmet, CORS, proxy, shutdown
+
+- **Sentry** (`error-reporter.ts`) — gated entirely on `SENTRY_DSN`. Importing it patches nothing;
+  only `initErrorReporter()` (at boot, when a DSN exists) turns it on. Off ⇒ `captureError` is a
+  no-op, zero external calls.
+- **helmet** — security headers (nosniff, HSTS, frameguard) and strips `x-powered-by`.
+- **CORS** — opt-in allowlist via `CORS_ORIGINS` (unset ⇒ no CORS headers; server-to-server
+  callers unaffected). For the future `apps/web`.
+- **`trust proxy`** — set `TRUST_PROXY=1` behind Render/LB so `req.ip` (the rate-limit key) is the
+  real client, not the proxy.
+- **`enableShutdownHooks()`** — clean pg-boss + Prisma shutdown on SIGTERM (Render sends it on
+  redeploy), so in-flight jobs/connections close gracefully.
+
+All of the above are applied by `applyHardening(app)` in [bootstrap.ts](../apps/api/src/bootstrap.ts),
+shared by `main.ts` and the hardening E2E so the test exercises a byte-identical app.
+
+### 19.6 Proof
+
+`pnpm --filter @fin/api e2e:hardening` boots the real app on an ephemeral port and asserts over
+HTTP: helmet headers present + `x-powered-by` stripped + `x-request-id` echoed; unauthenticated
+and unknown-route responses use the sanitized shape (with `requestId`, no stack); the limiter
+returns **429** past the budget; and `/health` stays 200 (skip-throttle works).

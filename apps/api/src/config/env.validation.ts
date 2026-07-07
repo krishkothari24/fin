@@ -23,6 +23,27 @@ export const envSchema = z.object({
   PLAID_WEBHOOK_URL: z.string().url().optional(),
 
   ENCRYPTION_KEY: z.string().optional(),
+
+  // --- Phase 6: hardening / prod readiness ---
+  // Error monitoring. Unset -> Sentry stays off (no-op); set it in prod.
+  SENTRY_DSN: z.string().url().optional(),
+  // Comma-separated browser origins allowed to call the API (the future web app).
+  // Unset -> CORS disabled (server-to-server only). e.g. "https://app.example.com".
+  CORS_ORIGINS: z.string().optional(),
+  // Rate limiting (in-memory, per-instance). TTL is the window in seconds; the
+  // limit is the global per-IP budget. Plaid-triggering endpoints (link-token /
+  // exchange) carry their own tighter fixed cap via @Throttle in the controller.
+  RATE_LIMIT_TTL: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_LIMIT: z.coerce.number().int().positive().default(120),
+  // Behind a proxy/load balancer (Render, etc.) trust N hops so client IPs
+  // (used for rate-limit keys) are the real caller, not the proxy.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // Structured logs as JSON (prod) vs. pretty single lines (dev). Unset -> follow
+  // NODE_ENV. (transform before optional so an absent value stays undefined.)
+  LOG_JSON: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

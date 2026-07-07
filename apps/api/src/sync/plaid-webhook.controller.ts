@@ -8,6 +8,7 @@ import {
   RawBodyRequest,
   Req,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { Prisma } from "@prisma/client";
 import { Request } from "express";
 import { PrismaService } from "../prisma/prisma.service";
@@ -26,7 +27,11 @@ interface PlaidWebhookBody {
  * Receives Plaid webhooks. Public (no JWT) — Plaid can't send a Supabase token —
  * but every request is signature-verified against Plaid's signing key before we
  * act on it. Always returns 200 quickly; the real work is enqueued.
+ *
+ * SkipThrottle: Plaid controls delivery (and legitimately retries); signature
+ * verification — not rate limiting — is what guards this endpoint.
  */
+@SkipThrottle()
 @Controller("plaid")
 export class PlaidWebhookController {
   private readonly logger = new Logger(PlaidWebhookController.name);

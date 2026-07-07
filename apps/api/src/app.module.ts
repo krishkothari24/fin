@@ -1,4 +1,7 @@
 import { Module } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AppConfigModule } from "./config/config.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { CryptoModule } from "./crypto/crypto.module";
@@ -10,10 +13,25 @@ import { AccountsModule } from "./accounts/accounts.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { AggregationsModule } from "./aggregations/aggregations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
   imports: [
     AppConfigModule,
+    // Phase 6: per-IP rate limiting. In-memory (per-instance) — fine for a single
+    // service; swap in a shared store if we ever scale horizontally.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: config.get<number>("RATE_LIMIT_TTL", 60) * 1000, // seconds -> ms
+            limit: config.get<number>("RATE_LIMIT_LIMIT", 120),
+          },
+        ],
+      }),
+    }),
+    ObservabilityModule,
     PrismaModule,
     CryptoModule,
     AuthModule,
@@ -24,7 +42,11 @@ import { DashboardModule } from "./dashboard/dashboard.module";
     TransactionsModule,
     AggregationsModule,
     DashboardModule,
-    // Phase 6: hardening (RLS, rate limiting, logging, Sentry, Plaid Production).
+  ],
+  providers: [
+    // Global rate-limit guard. Runs ahead of route guards; @SkipThrottle exempts
+    // the webhook + health check, @Throttle tightens the auth endpoints.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}
