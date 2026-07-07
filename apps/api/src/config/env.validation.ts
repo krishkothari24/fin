@@ -10,6 +10,7 @@ export const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
 
   DATABASE_URL: z.string().optional(),
+  DIRECT_URL: z.string().optional(),
 
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),

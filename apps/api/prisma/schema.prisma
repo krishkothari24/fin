@@ -7,7 +7,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Pooled connection (Supabase transaction pooler, :6543) for app queries.
+  url       = env("DATABASE_URL")
+  // Direct connection (:5432) for migrations — the pooler can't run DDL.
+  directUrl = env("DIRECT_URL")
 }
 
 enum ItemStatus {
