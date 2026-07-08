@@ -216,6 +216,7 @@ export type WidgetId =
   | "recent_transactions"
   | "cash_flow"
   | "holdings"
+  | "liabilities"
   | "recurring";
 
 /** Runtime list of every WidgetId (for validation). Keep in sync with WidgetId. */
@@ -226,6 +227,7 @@ export const WIDGET_IDS: WidgetId[] = [
   "recent_transactions",
   "cash_flow",
   "holdings",
+  "liabilities",
   "recurring",
 ];
 
@@ -244,7 +246,8 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
     { id: "recent_transactions", enabled: true, order: 3 },
     { id: "cash_flow", enabled: true, order: 4 },
     { id: "holdings", enabled: false, order: 5 },
-    { id: "recurring", enabled: false, order: 6 },
+    { id: "liabilities", enabled: false, order: 6 },
+    { id: "recurring", enabled: false, order: 7 },
   ],
   hiddenAccountIds: [],
   defaultRangeDays: 30,
