@@ -69,6 +69,8 @@ model Account {
   snapshots        BalanceSnapshot[]
   holdings         Holding[]
   investmentTxns   InvestmentTransaction[]
+  liability        Liability?
+  recurringStreams RecurringStream[]
 
   @@index([itemId])
   @@map("accounts")
@@ -198,4 +200,59 @@ model InvestmentTransaction {
 
   @@index([accountId, date])
   @@map("investment_transactions")
+}
+
+/// Liability detail for one account (Plaid Liabilities product): APR, statement /
+/// due dates, minimum payment. One row per liability account (credit / student /
+/// mortgage). The outstanding balance itself lives on Account.currentBalance;
+/// this holds the extra loan/card metadata. `kind`-specific extras that don't fit
+/// the common columns (credit APR breakdown, loan name, maturity date …) go in
+/// `details`. Replaced on each liabilities sync.
+model Liability {
+  id                     String    @id @default(uuid()) @db.Uuid
+  accountId              String    @unique @map("account_id") @db.Uuid
+  account                Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  kind                   String // credit | student | mortgage
+  aprPercentage          Decimal?  @map("apr_percentage") @db.Decimal(10, 4)
+  lastPaymentAmount      Decimal?  @map("last_payment_amount") @db.Decimal(20, 4)
+  lastPaymentDate        DateTime? @map("last_payment_date") @db.Date
+  lastStatementBalance   Decimal?  @map("last_statement_balance") @db.Decimal(20, 4)
+  lastStatementIssueDate DateTime? @map("last_statement_issue_date") @db.Date
+  minimumPaymentAmount   Decimal?  @map("minimum_payment_amount") @db.Decimal(20, 4)
+  nextPaymentDueDate     DateTime? @map("next_payment_due_date") @db.Date
+  isOverdue              Boolean?  @map("is_overdue")
+  details                Json? // kind-specific extras (credit aprs, loan name, maturity date …)
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@index([accountId])
+  @@map("liabilities")
+}
+
+/// A recurring transaction stream (Plaid Recurring Transactions): a detected
+/// subscription / paycheck / bill. `direction` = inflow (money in) | outflow
+/// (money out). Amounts are Plaid-positive magnitudes; use `direction` for sign.
+/// The full set is replaced on each recurring sync (Plaid returns active and
+/// inactive streams together).
+model RecurringStream {
+  id                String    @id @default(uuid()) @db.Uuid
+  accountId         String    @map("account_id") @db.Uuid
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  plaidStreamId     String    @unique @map("plaid_stream_id")
+  direction         String // inflow | outflow
+  description       String
+  merchantName      String?   @map("merchant_name")
+  category          String? // Plaid personal_finance_category primary
+  frequency         String // WEEKLY | BIWEEKLY | SEMI_MONTHLY | MONTHLY | ANNUALLY | UNKNOWN
+  status            String // MATURE | EARLY_DETECTION | TOMBSTONED | UNKNOWN
+  isActive          Boolean   @map("is_active")
+  firstDate         DateTime  @map("first_date") @db.Date
+  lastDate          DateTime  @map("last_date") @db.Date
+  predictedNextDate DateTime? @map("predicted_next_date") @db.Date
+  averageAmount     Decimal?  @map("average_amount") @db.Decimal(20, 4)
+  lastAmount        Decimal?  @map("last_amount") @db.Decimal(20, 4)
+  currency          String?   @default("USD")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([accountId])
+  @@map("recurring_streams")
 }

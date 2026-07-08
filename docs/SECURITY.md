@@ -52,7 +52,10 @@ The same pattern extends to the Phase 7 investments tables (migration
 `…_phase7_investments`): `holdings` and `investment_transactions` are user-scoped
 (join through `accounts → plaid_items`); `securities` is public market data and is
 RLS-enabled with **no** grant/policy, so it's invisible to `authenticated` like
-`webhook_events` (the API joins it in server-side).
+`webhook_events` (the API joins it in server-side). The Phase 8 tables (migration
+`…_phase8_liabilities_recurring`) follow it too: `liabilities` and
+`recurring_streams` are user-scoped via the same `accounts → plaid_items` join,
+SELECT-only for `authenticated`.
 
 All of this is asserted live by `pnpm --filter @fin/api e2e:rls`, which impersonates
 the `authenticated` role for a second user and proves it cannot see the first
@@ -79,7 +82,9 @@ per-request transaction, so it is a conscious future trade, not a default.
 These need your accounts/infra and are intentionally left as manual steps:
 
 1. **Request Plaid Production access** (dashboard → Production). Sandbox → Production
-   only changes `PLAID_ENV` + keys; the code is environment-agnostic.
+   only changes `PLAID_ENV` + keys; the code is environment-agnostic. Enable the
+   products we use on the Production app: **Transactions, Investments, Liabilities**
+   (Recurring Transactions is derived from Transactions — no separate entitlement).
 2. **Public webhook URL** — set `PLAID_WEBHOOK_URL` to a reachable HTTPS endpoint.
    For local end-to-end webhook delivery use a tunnel (e.g. `cloudflared` /
    `ngrok`) pointed at `/api/plaid/webhook`; in prod it's the deployed URL.

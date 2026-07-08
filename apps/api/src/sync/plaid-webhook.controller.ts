@@ -80,9 +80,14 @@ export class PlaidWebhookController {
   private async dispatch(body: PlaidWebhookBody): Promise<void> {
     const { webhook_type, webhook_code, item_id } = body;
 
-    if (webhook_type === "TRANSACTIONS" && webhook_code === "SYNC_UPDATES_AVAILABLE") {
+    // Transactions: new/updated transactions to pull, or recurring streams changed.
+    if (webhook_type === "TRANSACTIONS") {
       const item = await this.prisma.plaidItem.findUnique({ where: { plaidItemId: item_id } });
-      if (item) await this.queue.enqueueSync(item.id);
+      if (!item) return;
+      if (webhook_code === "SYNC_UPDATES_AVAILABLE") await this.queue.enqueueSync(item.id);
+      else if (webhook_code === "RECURRING_TRANSACTIONS_UPDATE") {
+        await this.queue.enqueueRecurringSync(item.id);
+      }
       return;
     }
 
@@ -90,6 +95,13 @@ export class PlaidWebhookController {
     if (webhook_type === "HOLDINGS" || webhook_type === "INVESTMENTS_TRANSACTIONS") {
       const item = await this.prisma.plaidItem.findUnique({ where: { plaidItemId: item_id } });
       if (item) await this.queue.enqueueInvestmentsSync(item.id);
+      return;
+    }
+
+    // Liabilities: card / loan detail updated (webhook_code DEFAULT_UPDATE).
+    if (webhook_type === "LIABILITIES") {
+      const item = await this.prisma.plaidItem.findUnique({ where: { plaidItemId: item_id } });
+      if (item) await this.queue.enqueueLiabilitiesSync(item.id);
       return;
     }
 

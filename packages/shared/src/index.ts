@@ -129,6 +129,84 @@ export interface InvestmentTransactionsPage {
   offset: number;
 }
 
+// ---- liabilities (Plaid Liabilities product) ---------------------------
+
+export type LiabilityKind = "credit" | "student" | "mortgage";
+
+/** Liability detail for one account. Money/rates as strings; dates ISO (YYYY-MM-DD). */
+export interface LiabilityDto {
+  id: string;
+  accountId: string;
+  accountName: string;
+  mask: string | null;
+  kind: LiabilityKind;
+  /** Outstanding balance (from the account itself). */
+  currentBalance: string | null;
+  /** Representative APR / interest rate as a percentage (credit: purchase APR). */
+  aprPercentage: string | null;
+  lastPaymentAmount: string | null;
+  lastPaymentDate: string | null;
+  lastStatementBalance: string | null;
+  lastStatementIssueDate: string | null;
+  minimumPaymentAmount: string | null;
+  nextPaymentDueDate: string | null;
+  isOverdue: boolean | null;
+  currency: string | null;
+}
+
+/** All liabilities for the user plus a debt total. */
+export interface LiabilitiesResponse {
+  liabilities: LiabilityDto[];
+  totals: {
+    totalDebt: string; // sum of outstanding balances across liability accounts
+    minimumPaymentDue: string; // sum of minimum payments
+    currency: string;
+  };
+}
+
+// ---- recurring transactions (Plaid Recurring Transactions) -------------
+
+export type RecurringDirection = "inflow" | "outflow";
+export type RecurringFrequency =
+  | "UNKNOWN"
+  | "WEEKLY"
+  | "BIWEEKLY"
+  | "SEMI_MONTHLY"
+  | "MONTHLY"
+  | "ANNUALLY";
+
+/** One recurring stream (subscription / paycheck / bill). Amounts as strings. */
+export interface RecurringStreamDto {
+  id: string;
+  accountId: string;
+  direction: RecurringDirection;
+  description: string;
+  merchantName: string | null;
+  category: string | null;
+  frequency: RecurringFrequency | string;
+  status: string;
+  isActive: boolean;
+  firstDate: string;
+  lastDate: string;
+  predictedNextDate: string | null;
+  averageAmount: string | null; // positive magnitude; use `direction` for sign
+  lastAmount: string | null;
+  /** `averageAmount` normalized to a per-month figure using `frequency`. */
+  monthlyEstimate: string | null;
+  currency: string | null;
+}
+
+/** Recurring streams split by direction, with normalized monthly totals. */
+export interface RecurringResponse {
+  inflows: RecurringStreamDto[];
+  outflows: RecurringStreamDto[];
+  totals: {
+    monthlyInflow: string; // active inflow streams, normalized to per-month
+    monthlyOutflow: string; // active outflow streams, normalized to per-month
+    currency: string;
+  };
+}
+
 // ---- dashboard config ("choose what to show") --------------------------
 
 export type WidgetId =

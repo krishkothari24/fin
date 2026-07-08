@@ -1,6 +1,6 @@
 # fin-dashboard — Technical State of the Application
 
-_Snapshot as of 2026-07-07 · Phases 1–7 complete (Phase 7 = Plaid Investments) · security → [SECURITY.md](./SECURITY.md)_
+_Snapshot as of 2026-07-07 · Phases 1–8 complete (Phase 8 = Plaid Liabilities + Recurring Transactions) · security → [SECURITY.md](./SECURITY.md)_
 
 This document is the ground-truth of **what exists, how it works, and why** — written
 to be read end-to-end by someone who has never touched Prisma, Plaid, or NestJS. It is
@@ -34,7 +34,7 @@ scripted Plaid Sandbox runs, not a browser.
 
 ## 2. Where we are right now (phase status)
 
-The build is organized into 6 phases. We have finished 5 of them.
+The build is organized into 8 phases. All are complete.
 
 | Phase | Scope | Status |
 |------:|-------|--------|
@@ -45,6 +45,7 @@ The build is organized into 6 phases. We have finished 5 of them.
 | **5** | Dashboard config + daily balance snapshots (net-worth-over-time) | ✅ **done, verified live** |
 | **6** | Hardening: RLS, rate limiting, structured logging, sanitized errors, helmet/CORS, Sentry | ✅ **done, verified live** |
 | **7** | Plaid **Investments**: holdings/positions + investment transactions + read API | ✅ **done, verified live** |
+| **8** | Plaid **Liabilities** (card/loan detail) + **Recurring Transactions** (subscriptions) + read APIs | ✅ **done, verified live** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -977,3 +978,77 @@ default — opt-in).
 - **Idempotency**: a second sync left holdings (13) and investment transactions (1170) unchanged
   (holdings replaced wholesale; transactions upserted). Then it purged cleanly (securities, being
   shared market data, are intentionally left behind for reuse).
+
+## 21. Phase 8 in depth — Plaid Liabilities + Recurring Transactions
+
+Two more Plaid products, built to the same shape as Phase 7 (own module, own sync service, own
+background queue, own read API, live E2E). One adds **detail to the debts we already show**; the
+other turns transaction history into a **subscriptions/bills view**.
+
+### 21.1 What's connected
+
+The link-token now also requests Liabilities via `required_if_supported_products: [Investments,
+Liabilities]` ([plaid.service.ts](../apps/api/src/plaid/plaid.service.ts)) — supporting
+institutions grant card/loan detail, others still link. **Recurring transactions need no extra
+product** — they're derived from Transactions (which every item already has), so recurring sync
+just calls `/transactions/recurring/get`. Two new Plaid calls: `/liabilities/get` and
+`/transactions/recurring/get`.
+
+### 21.2 Data model — 2 new tables
+
+- **liabilities** — one row per liability account (`kind` = credit | student | mortgage). Common
+  columns that matter across all three (APR/rate, last payment, last statement, **minimum payment**,
+  **next due date**, overdue flag); `kind`-specific extras (credit APR breakdown, loan name,
+  maturity date, YTD interest/principal…) go in a `details` JSONB. The **outstanding balance itself
+  is not duplicated** — it already lives on `Account.currentBalance`; this table is the extra
+  metadata. Unique per account; replaced wholesale each sync.
+- **recurring_streams** — one row per detected stream. `direction` = inflow | outflow;
+  `frequency` (WEEKLY…ANNUALLY), `status`, `is_active`, first/last/`predicted_next_date`, and
+  `average`/`last` amounts stored as **positive magnitudes** (`direction` carries the sign — Plaid
+  itself signs inflows negative). Unique on Plaid's `stream_id`; replaced wholesale each sync
+  (Plaid returns the full current set, active + inactive, every call).
+
+### 21.3 The sync engines
+
+Two background pg-boss jobs, on the `sync-liabilities` and `sync-recurring` queues, each enqueued
+on connect ([items.service.ts](../apps/api/src/items/items.service.ts)) and on the relevant
+webhook:
+
+- **Liabilities** — [liabilities-sync.service.ts](../apps/api/src/liabilities/liabilities-sync.service.ts):
+  fetch `/liabilities/get`, upsert account balances, then **replace** the item's liability rows in
+  one atomic `deleteMany`+`createMany`. Webhook: `LIABILITIES` / `DEFAULT_UPDATE`.
+- **Recurring** — [recurring-sync.service.ts](../apps/api/src/recurring/recurring-sync.service.ts):
+  fetch `/transactions/recurring/get`, map inflow + outflow streams, replace wholesale. Webhook:
+  `TRANSACTIONS` / `RECURRING_TRANSACTIONS_UPDATE` (a new code alongside the existing
+  `SYNC_UPDATES_AVAILABLE` under the same type).
+- **Best-effort** — institutions without liabilities, or items whose transactions aren't ready yet,
+  return skippable codes (`NO_LIABILITY_ACCOUNTS`, `PRODUCTS_NOT_SUPPORTED`, `PRODUCT_NOT_READY`)
+  that are caught and **skipped**, not failed — a webhook re-triggers when ready.
+
+### 21.4 Read API
+
+Both guarded, user-scoped, hidden accounts excluded (consistent with the rest of the app):
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/liabilities` | liabilities (joined to their account for name/balance) + totals: **`totalDebt`** (sum of outstanding balances), **`minimumPaymentDue`** |
+| `GET /api/recurring` | streams split into **`inflows`** / **`outflows`**, each with a `monthlyEstimate` (amount normalized to per-month by frequency), + totals `monthlyInflow` / `monthlyOutflow` over active streams. Filters: `activeOnly` (default true), `accountId` |
+
+The `recurring` widget id already existed in `DEFAULT_DASHBOARD_CONFIG` (disabled by default,
+opt-in), so no dashboard change was needed for it.
+
+### 21.5 Proof (live)
+
+`pnpm --filter @fin/api e2e:liabilities-recurring` connected the sandbox item, synced transactions
+first (recurring depends on them), and proved:
+
+- **3 liability accounts** landed — `credit, mortgage, student` — with `totalDebt = 121974.06`
+  cross-checked to the cent against a raw sum of the accounts' balances; `minimumPaymentDue =
+  3186.54`.
+- **8 recurring streams** (1 inflow, 7 outflows); DB counts matched the sync result; monthly
+  run-rate totals computed (`monthlyIn = 4.22`, `monthlyOut = 3771.40`) and non-negative after the
+  magnitude fix. `activeOnly` never exceeds the full set.
+- **Hidden-account exclusion**: hiding a liability account dropped it from the list and didn't
+  increase total debt; unhiding restored it.
+- **Idempotency**: a second sync of each left liability (3) and stream (8) counts unchanged (both
+  replaced wholesale). Then it purged cleanly.

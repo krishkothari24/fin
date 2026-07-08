@@ -7,10 +7,12 @@ import {
   InvestmentsHoldingsGetResponse,
   InvestmentsTransactionsGetResponse,
   JWKPublicKey,
+  LiabilitiesGetResponse,
   PlaidApi,
   PlaidEnvironments,
   Products,
   SandboxItemFireWebhookRequestWebhookCodeEnum,
+  TransactionsRecurringGetResponse,
   TransactionsSyncResponse,
 } from "plaid";
 
@@ -43,16 +45,17 @@ export class PlaidService {
 
   /**
    * New connection: a link_token the frontend opens Plaid Link with.
-   * Transactions is required; Investments is requested via
-   * `required_if_supported_products` so investment-capable institutions grant
-   * holdings + investment transactions, while depository-only banks still link.
+   * Transactions is required; Investments and Liabilities are requested via
+   * `required_if_supported_products` so institutions that support them grant the
+   * extra data (holdings, loan/card detail), while depository-only banks still
+   * link. Recurring transactions are derived from Transactions — no extra product.
    */
   async createLinkToken(userId: string) {
     const res = await this.client.linkTokenCreate({
       user: { client_user_id: userId },
       client_name: this.clientName,
       products: [Products.Transactions],
-      required_if_supported_products: [Products.Investments],
+      required_if_supported_products: [Products.Investments, Products.Liabilities],
       country_codes: [CountryCode.Us],
       language: "en",
       webhook: this.webhookUrl,
@@ -151,6 +154,29 @@ export class PlaidService {
     return res.data;
   }
 
+  /**
+   * Liability detail (`/liabilities/get`): the accounts plus a `liabilities`
+   * object with credit / student / mortgage arrays (APR, statement + due dates,
+   * minimum payment).
+   */
+  async liabilities(accessToken: string): Promise<LiabilitiesGetResponse> {
+    const res = await this.client.liabilitiesGet({ access_token: accessToken });
+    return res.data;
+  }
+
+  /**
+   * Recurring transaction streams (`/transactions/recurring/get`): detected
+   * inflow + outflow streams (subscriptions, bills, paychecks). Derived from the
+   * Transactions product, so it only works once transactions have been synced.
+   */
+  async transactionsRecurring(accessToken: string): Promise<TransactionsRecurringGetResponse> {
+    const res = await this.client.transactionsRecurringGet({
+      access_token: accessToken,
+      options: { include_personal_finance_category: true },
+    });
+    return res.data;
+  }
+
   /** Fetch the public key Plaid signed a webhook JWT with (verified in WebhookVerificationService). */
   async getWebhookVerificationKey(keyId: string): Promise<JWKPublicKey> {
     const res = await this.client.webhookVerificationKeyGet({ key_id: keyId });
@@ -167,13 +193,14 @@ export class PlaidService {
 
   /**
    * Sandbox-only: mint a public_token without the frontend Link flow (for tests).
-   * Includes Investments so the sandbox item carries holdings + investment
-   * transactions (ins_109508 supports it).
+   * Includes Investments + Liabilities so the sandbox item carries holdings,
+   * investment transactions, and loan/card detail (ins_109508 supports them).
+   * Recurring streams derive from Transactions, so no extra product is needed.
    */
   async sandboxCreatePublicToken(institutionId = "ins_109508"): Promise<string> {
     const res = await this.client.sandboxPublicTokenCreate({
       institution_id: institutionId,
-      initial_products: [Products.Transactions, Products.Investments],
+      initial_products: [Products.Transactions, Products.Investments, Products.Liabilities],
     });
     return res.data.public_token;
   }

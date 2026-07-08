@@ -49,9 +49,12 @@ export class ItemsService {
     const accounts = await this.plaid.getAccounts(accessToken);
     await this.storeAccounts(item.id, accounts);
 
-    // Kick off the initial transaction pull + investments pull in the background.
+    // Kick off the initial pulls in the background: transactions, investments,
+    // liabilities, and recurring streams (recurring lands once transactions do).
     await this.queue.enqueueSync(item.id);
     await this.queue.enqueueInvestmentsSync(item.id);
+    await this.queue.enqueueLiabilitiesSync(item.id);
+    await this.queue.enqueueRecurringSync(item.id);
     return { itemId: item.id, institutionName, accountsConnected: accounts.length };
   }
 

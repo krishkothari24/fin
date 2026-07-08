@@ -18,7 +18,8 @@
     "e2e:dashboard": "ts-node scripts/dashboard-e2e.ts",
     "e2e:rls": "ts-node scripts/rls-e2e.ts",
     "e2e:hardening": "ts-node scripts/hardening-e2e.ts",
-    "e2e:investments": "ts-node scripts/investments-e2e.ts"
+    "e2e:investments": "ts-node scripts/investments-e2e.ts",
+    "e2e:liabilities-recurring": "ts-node scripts/liabilities-recurring-e2e.ts"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

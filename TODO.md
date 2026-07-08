@@ -19,9 +19,12 @@ section is fine. See [docs/STATE.md](docs/STATE.md) for what already exists and
       holdings (positions, securities, cost basis, gain/loss) + investment
       transactions, with `GET /investments/holdings` and `/investments/transactions`.
       See [docs/STATE.md](docs/STATE.md) §20.
-- [ ] **Liabilities** — enable Plaid's Liabilities product for card/loan detail
-      (APR, statement/due dates, minimum payment).
-- [ ] **Recurring Transactions** — Plaid's recurring streams → a subscriptions view.
+- [x] **Liabilities** — ✅ done (Phase 8). Plaid Liabilities product enabled:
+      credit/student/mortgage detail (APR, statement/due dates, minimum payment),
+      with `GET /liabilities`. See [docs/STATE.md](docs/STATE.md) §21.
+- [x] **Recurring Transactions** — ✅ done (Phase 8). Plaid's recurring streams →
+      inflow/outflow subscriptions view with monthly run-rate, `GET /recurring`.
+      See [docs/STATE.md](docs/STATE.md) §21.
 
 ## Backend / data
 

@@ -14,6 +14,8 @@ import { TransactionsModule } from "./transactions/transactions.module";
 import { AggregationsModule } from "./aggregations/aggregations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { InvestmentsModule } from "./investments/investments.module";
+import { LiabilitiesModule } from "./liabilities/liabilities.module";
+import { RecurringModule } from "./recurring/recurring.module";
 import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
@@ -44,6 +46,8 @@ import { ObservabilityModule } from "./observability/observability.module";
     AggregationsModule,
     DashboardModule,
     InvestmentsModule,
+    LiabilitiesModule,
+    RecurringModule,
   ],
   providers: [
     // Global rate-limit guard. Runs ahead of route guards; @SkipThrottle exempts
