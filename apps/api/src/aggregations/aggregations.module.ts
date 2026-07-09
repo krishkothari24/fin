@@ -5,5 +5,6 @@ import { AggregationsService } from "./aggregations.service";
 @Module({
   controllers: [AggregationsController],
   providers: [AggregationsService],
+  exports: [AggregationsService],
 })
 export class AggregationsModule {}

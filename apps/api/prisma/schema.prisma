@@ -26,6 +26,9 @@ model Profile {
   createdAt       DateTime         @default(now()) @map("created_at")
   items           PlaidItem[]
   dashboardConfig DashboardConfig?
+  manualAssets    ManualAsset[]
+  budgets         Budget[]
+  goals           Goal[]
 
   @@map("profiles")
 }
@@ -71,6 +74,7 @@ model Account {
   investmentTxns   InvestmentTransaction[]
   liability        Liability?
   recurringStreams RecurringStream[]
+  goals            Goal[]
 
   @@index([itemId])
   @@map("accounts")
@@ -94,9 +98,46 @@ model Transaction {
   paymentChannel     String?   @map("payment_channel")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
+  detail             TransactionDetail?
+  splits             TransactionSplit[]
 
   @@index([accountId, date])
   @@map("transactions")
+}
+
+/// User edits to one transaction: note, category override, tags. 1:1, created
+/// lazily on first edit. NEVER referenced by sync.service.ts's TransactionRecord
+/// mapper — that's what makes it immune to being clobbered on every resync (the
+/// upsert's `update` payload only ever contains keys mapPlaidTransaction returns).
+model TransactionDetail {
+  id               String      @id @default(uuid()) @db.Uuid
+  transactionId    String      @unique @map("transaction_id") @db.Uuid
+  transaction      Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  note             String?
+  categoryOverride String?     @map("category_override") // Plaid personal_finance_category primary
+  tags             String[]    @default([])
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  @@map("transaction_details")
+}
+
+/// One line of a user-split transaction. The parent Transaction.amount stays the
+/// source of truth for the account total; splits' amounts must sum to it
+/// (enforced in TransactionsService, not a DB constraint). Replaced wholesale on
+/// every edit (delete all + recreate), same idiom as the Plaid sync services.
+model TransactionSplit {
+  id               String      @id @default(uuid()) @db.Uuid
+  transactionId    String      @map("transaction_id") @db.Uuid
+  transaction      Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  amount           Decimal     @db.Decimal(20, 4)
+  categoryOverride String?     @map("category_override")
+  note             String?
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  @@index([transactionId])
+  @@map("transaction_splits")
 }
 
 /// Daily balance snapshot per account -> powers net-worth-over-time.
@@ -255,4 +296,68 @@ model RecurringStream {
 
   @@index([accountId])
   @@map("recurring_streams")
+}
+
+/// A user-entered, off-platform net-worth item (real estate, vehicle, cash, crypto,
+/// or a manually-tracked liability) — not synced from Plaid. Unlike Liability/
+/// RecurringStream (which scope through Account -> PlaidItem), this is a top-level
+/// row directly owned by the user, since it has no Plaid account to hang off of.
+model ManualAsset {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  user         Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  kind         String // asset | liability
+  category     String // real_estate | vehicle | cash | crypto | other_asset | loan | credit_debt | other_liability
+  currentValue Decimal  @map("current_value") @db.Decimal(20, 4)
+  currency     String?  @default("USD")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("manual_assets")
+}
+
+/// A recurring monthly spending limit for one Plaid personal-finance-category
+/// primary value. Not per-month history — one row per (user, category); the
+/// current month's actual spend is computed on read from Transaction via
+/// AggregationsService.spendingByCategory(), never stored here.
+model Budget {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  user         Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     String // Plaid personal_finance_category primary (see PLAID_PRIMARY_CATEGORIES)
+  monthlyLimit Decimal  @map("monthly_limit") @db.Decimal(20, 4)
+  currency     String?  @default("USD")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, category])
+  @@map("budgets")
+}
+
+/// A savings target or debt-payoff goal. Progress is computed on read, never
+/// stored: if `linkedAccountId` is set, current amount tracks that account's
+/// live `currentBalance`; otherwise `currentAmountOverride` is a manually-bumped
+/// number the user updates themselves (e.g. savings spread across several places
+/// with no single account to link).
+model Goal {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  user                  Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                  String
+  kind                  String // savings | debt_payoff
+  targetAmount          Decimal   @map("target_amount") @db.Decimal(20, 4)
+  targetDate            DateTime? @map("target_date") @db.Date
+  linkedAccountId       String?   @map("linked_account_id") @db.Uuid
+  linkedAccount         Account?  @relation(fields: [linkedAccountId], references: [id], onDelete: SetNull)
+  currentAmountOverride Decimal?  @map("current_amount_override") @db.Decimal(20, 4)
+  notes                 String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([linkedAccountId])
+  @@map("goals")
 }

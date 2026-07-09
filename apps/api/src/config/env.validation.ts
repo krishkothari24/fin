@@ -13,9 +13,8 @@ export const envSchema = z.object({
   DIRECT_URL: z.string().optional(),
 
   SUPABASE_URL: z.string().url().optional(),
-  SUPABASE_ANON_KEY: z.string().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  SUPABASE_JWT_SECRET: z.string().optional(),
+  SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+  SUPABASE_SECRET_KEY: z.string().optional(),
 
   PLAID_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
   PLAID_CLIENT_ID: z.string().optional(),

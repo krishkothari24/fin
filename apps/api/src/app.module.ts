@@ -16,6 +16,9 @@ import { DashboardModule } from "./dashboard/dashboard.module";
 import { InvestmentsModule } from "./investments/investments.module";
 import { LiabilitiesModule } from "./liabilities/liabilities.module";
 import { RecurringModule } from "./recurring/recurring.module";
+import { ManualAssetsModule } from "./manual-assets/manual-assets.module";
+import { BudgetsModule } from "./budgets/budgets.module";
+import { GoalsModule } from "./goals/goals.module";
 import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
@@ -48,6 +51,9 @@ import { ObservabilityModule } from "./observability/observability.module";
     InvestmentsModule,
     LiabilitiesModule,
     RecurringModule,
+    ManualAssetsModule,
+    BudgetsModule,
+    GoalsModule,
   ],
   providers: [
     // Global rate-limit guard. Runs ahead of route guards; @SkipThrottle exempts

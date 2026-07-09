@@ -1,8 +1,13 @@
-import { Transaction } from "@prisma/client";
+import { Transaction, TransactionDetail, TransactionSplit } from "@prisma/client";
 import { TransactionDto } from "@fin/shared";
 
-/** Map a persisted Transaction to the API DTO. Pure. */
-export function toTransactionDto(t: Transaction): TransactionDto {
+type TransactionWithDetail = Transaction & {
+  detail?: TransactionDetail | null;
+  splits?: TransactionSplit[];
+};
+
+/** Map a persisted Transaction (+ optional user edits) to the API DTO. Pure. */
+export function toTransactionDto(t: TransactionWithDetail): TransactionDto {
   return {
     id: t.id,
     accountId: t.accountId,
@@ -12,6 +17,14 @@ export function toTransactionDto(t: Transaction): TransactionDto {
     name: t.name,
     merchantName: t.merchantName,
     pending: t.pending,
-    category: { primary: t.pfcPrimary, detailed: t.pfcDetailed },
+    category: { primary: t.detail?.categoryOverride ?? t.pfcPrimary, detailed: t.pfcDetailed },
+    note: t.detail?.note ?? null,
+    tags: t.detail?.tags ?? [],
+    splits: (t.splits ?? []).map((s) => ({
+      id: s.id,
+      amount: s.amount.toString(),
+      category: s.categoryOverride,
+      note: s.note,
+    })),
   };
 }

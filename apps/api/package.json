@@ -19,7 +19,11 @@
     "e2e:rls": "ts-node scripts/rls-e2e.ts",
     "e2e:hardening": "ts-node scripts/hardening-e2e.ts",
     "e2e:investments": "ts-node scripts/investments-e2e.ts",
-    "e2e:liabilities-recurring": "ts-node scripts/liabilities-recurring-e2e.ts"
+    "e2e:liabilities-recurring": "ts-node scripts/liabilities-recurring-e2e.ts",
+    "e2e:manual-assets": "ts-node scripts/manual-assets-e2e.ts",
+    "e2e:budgets": "ts-node scripts/budgets-e2e.ts",
+    "e2e:transaction-details": "ts-node scripts/transaction-details-e2e.ts",
+    "e2e:goals": "ts-node scripts/goals-e2e.ts"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

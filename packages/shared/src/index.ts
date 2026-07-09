@@ -29,6 +29,14 @@ export interface AccountDto {
   institutionName: string | null;
 }
 
+/** One line of a user-split transaction. See TransactionDto.splits. */
+export interface TransactionSplitDto {
+  id: string;
+  amount: string;
+  category: string | null;
+  note: string | null;
+}
+
 export interface TransactionDto {
   id: string;
   accountId: string;
@@ -38,7 +46,24 @@ export interface TransactionDto {
   name: string;
   merchantName: string | null;
   pending: boolean;
+  /** `primary` reflects the user's category override when one is set, else Plaid's. */
   category: { primary: string | null; detailed: string | null };
+  note: string | null;
+  tags: string[];
+  /** Empty when the transaction hasn't been split. Amounts sum to `amount`. */
+  splits: TransactionSplitDto[];
+}
+
+/** PATCH /transactions/:id body — all fields optional. */
+export interface UpdateTransactionDetailDto {
+  note?: string | null;
+  categoryOverride?: string | null;
+  tags?: string[];
+}
+
+/** PUT /transactions/:id/splits body — full replacement set. */
+export interface SetTransactionSplitsDto {
+  splits: Array<{ amount: string; category?: string; note?: string }>;
 }
 
 export interface NetWorthDto {
@@ -207,6 +232,141 @@ export interface RecurringResponse {
   };
 }
 
+// ---- manual assets & liabilities (user-entered, off-platform net worth) ----
+
+export type ManualAssetKind = "asset" | "liability";
+export type ManualAssetCategory =
+  | "real_estate"
+  | "vehicle"
+  | "cash"
+  | "crypto"
+  | "other_asset"
+  | "loan"
+  | "credit_debt"
+  | "other_liability";
+
+/** Runtime list of every ManualAssetCategory (for validation). */
+export const MANUAL_ASSET_CATEGORIES: ManualAssetCategory[] = [
+  "real_estate",
+  "vehicle",
+  "cash",
+  "crypto",
+  "other_asset",
+  "loan",
+  "credit_debt",
+  "other_liability",
+];
+
+/** A user-entered, off-platform net-worth item (not synced from Plaid). */
+export interface ManualAssetDto {
+  id: string;
+  name: string;
+  kind: ManualAssetKind;
+  category: ManualAssetCategory;
+  currentValue: string;
+  currency: string | null;
+  notes: string | null;
+  updatedAt: string;
+}
+
+export interface CreateManualAssetDto {
+  name: string;
+  kind: ManualAssetKind;
+  category: ManualAssetCategory;
+  currentValue: string;
+  currency?: string;
+  notes?: string;
+}
+
+export type UpdateManualAssetDto = Partial<CreateManualAssetDto>;
+
+/** All manual entries for the user, split by kind, plus net totals. */
+export interface ManualAssetsResponse {
+  assets: ManualAssetDto[];
+  liabilities: ManualAssetDto[];
+  totals: {
+    assetsValue: string;
+    liabilitiesValue: string;
+    currency: string;
+  };
+}
+
+// ---- budgets (monthly spend limit per Plaid PFC category) --------------
+
+/** Plaid's fixed personal_finance_category primary values. */
+export const PLAID_PRIMARY_CATEGORIES = [
+  "INCOME",
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+  "LOAN_PAYMENTS",
+  "BANK_FEES",
+  "ENTERTAINMENT",
+  "FOOD_AND_DRINK",
+  "GENERAL_MERCHANDISE",
+  "HOME_IMPROVEMENT",
+  "MEDICAL",
+  "PERSONAL_CARE",
+  "GENERAL_SERVICES",
+  "GOVERNMENT_AND_NON_PROFIT",
+  "TRANSPORTATION",
+  "TRAVEL",
+  "RENT_AND_UTILITIES",
+  "OTHER",
+] as const;
+export type PlaidPrimaryCategory = (typeof PLAID_PRIMARY_CATEGORIES)[number];
+
+/** One category's budget vs. actual spend for the requested month. */
+export interface BudgetDto {
+  category: PlaidPrimaryCategory | string;
+  monthlyLimit: string;
+  spent: string;
+  remaining: string; // monthlyLimit - spent (can be negative when over)
+  percentUsed: number; // spent / monthlyLimit * 100, uncapped
+  currency: string;
+}
+
+export interface BudgetsResponse {
+  month: string; // YYYY-MM
+  budgets: BudgetDto[];
+}
+
+// ---- goals (savings target / debt payoff) -------------------------------
+
+export type GoalKind = "savings" | "debt_payoff";
+
+/**
+ * A savings target or debt-payoff goal. `currentAmount`/`progressPercent` are
+ * computed on read: from the linked account's live balance when `linkedAccountId`
+ * is set, else from `currentAmountOverride`. For `debt_payoff`, `currentAmount`
+ * is the amount paid down (targetAmount - remaining balance), not the balance.
+ */
+export interface GoalDto {
+  id: string;
+  name: string;
+  kind: GoalKind;
+  targetAmount: string;
+  targetDate: string | null; // ISO date
+  linkedAccountId: string | null;
+  linkedAccountName: string | null;
+  currentAmount: string;
+  progressPercent: number; // uncapped; a debt paid down past target can exceed 100
+  notes: string | null;
+  currency: string;
+  updatedAt: string;
+}
+
+export interface CreateGoalDto {
+  name: string;
+  kind: GoalKind;
+  targetAmount: string;
+  targetDate?: string;
+  linkedAccountId?: string;
+  currentAmountOverride?: string;
+  notes?: string;
+}
+
+export type UpdateGoalDto = Partial<CreateGoalDto>;
+
 // ---- dashboard config ("choose what to show") --------------------------
 
 export type WidgetId =
@@ -217,7 +377,10 @@ export type WidgetId =
   | "cash_flow"
   | "holdings"
   | "liabilities"
-  | "recurring";
+  | "recurring"
+  | "manual_assets"
+  | "budgets"
+  | "goals";
 
 /** Runtime list of every WidgetId (for validation). Keep in sync with WidgetId. */
 export const WIDGET_IDS: WidgetId[] = [
@@ -229,6 +392,9 @@ export const WIDGET_IDS: WidgetId[] = [
   "holdings",
   "liabilities",
   "recurring",
+  "manual_assets",
+  "budgets",
+  "goals",
 ];
 
 export interface DashboardConfig {
@@ -248,6 +414,9 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
     { id: "holdings", enabled: false, order: 5 },
     { id: "liabilities", enabled: false, order: 6 },
     { id: "recurring", enabled: false, order: 7 },
+    { id: "manual_assets", enabled: false, order: 8 },
+    { id: "budgets", enabled: false, order: 9 },
+    { id: "goals", enabled: false, order: 10 },
   ],
   hiddenAccountIds: [],
   defaultRangeDays: 30,

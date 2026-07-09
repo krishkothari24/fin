@@ -6,12 +6,10 @@ section is fine. See [docs/STATE.md](docs/STATE.md) for what already exists and
 
 ## Frontend (`apps/web`)
 
-- [ ] **Use Intl formatters.** Format all money/dates/numbers on the frontend with
-      `Intl.NumberFormat` / `Intl.DateTimeFormat` — never hand-rolled. Money crosses
-      the wire as strings and each user has a `currency` in their dashboard config,
-      so format with that currency + the user's locale (e.g.
-      `new Intl.NumberFormat(locale, { style: "currency", currency }).format(Number(amount))`).
-      One shared `formatMoney` / `formatDate` helper, used everywhere.
+- [x] **Use Intl formatters.** Done — `formatMoney`/`formatDate` in
+      [apps/web/src/lib/format.ts](apps/web/src/lib/format.ts) use
+      `Intl.NumberFormat`/`Intl.DateTimeFormat` and are the only formatting path used
+      across routes/widgets.
 
 ## Product / Plaid
 
@@ -25,6 +23,22 @@ section is fine. See [docs/STATE.md](docs/STATE.md) for what already exists and
 - [x] **Recurring Transactions** — ✅ done (Phase 8). Plaid's recurring streams →
       inflow/outflow subscriptions view with monthly run-rate, `GET /recurring`.
       See [docs/STATE.md](docs/STATE.md) §21.
+- [x] **Manual Assets & Liabilities** — ✅ done (Phase 9). User-entered off-platform
+      net worth (real estate, vehicles, cash, crypto, manual debts), included in
+      `netWorth()`, `GET/POST/PATCH/DELETE /manual-assets`. See
+      [docs/STATE.md](docs/STATE.md) §22.
+- [x] **Budgets** — ✅ done (Phase 10). Monthly spend limit per Plaid category vs.
+      actual spend, `GET /budgets`, `PUT/DELETE /budgets/:category`. See
+      [docs/STATE.md](docs/STATE.md) §23.
+- [x] **Transaction notes/tags/category overrides/splits** — ✅ done (Phase 11).
+      `PATCH /transactions/:id`, `PUT/DELETE /transactions/:id/splits`. See
+      [docs/STATE.md](docs/STATE.md) §24.
+- [x] **Goals** — ✅ done (Phase 12). Savings-target / debt-payoff tracking,
+      optionally linked to a live account balance. `GET/POST /goals`,
+      `PATCH/DELETE /goals/:id`. See [docs/STATE.md](docs/STATE.md) §25.
+- [ ] **Alerts** — rule-based notifications (balance below X, bill due soon,
+      budget over threshold). Deliberately out of scope for phases 9-12; needs
+      new notification/email infrastructure this repo doesn't have yet.
 
 ## Backend / data
 
@@ -34,3 +48,4 @@ section is fine. See [docs/STATE.md](docs/STATE.md) for what already exists and
 
 - See [docs/SECURITY.md](docs/SECURITY.md) → "Go-to-production checklist" (Plaid
   Production, webhook URL/tunnel, Sentry DSN, Render deploy).
+  .env file should just be 1 for backend and front end. look into it.

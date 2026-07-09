@@ -34,7 +34,7 @@ scripted Plaid Sandbox runs, not a browser.
 
 ## 2. Where we are right now (phase status)
 
-The build is organized into 8 phases. All are complete.
+The build is organized into phases. 1–12 are complete.
 
 | Phase | Scope | Status |
 |------:|-------|--------|
@@ -46,6 +46,10 @@ The build is organized into 8 phases. All are complete.
 | **6** | Hardening: RLS, rate limiting, structured logging, sanitized errors, helmet/CORS, Sentry | ✅ **done, verified live** |
 | **7** | Plaid **Investments**: holdings/positions + investment transactions + read API | ✅ **done, verified live** |
 | **8** | Plaid **Liabilities** (card/loan detail) + **Recurring Transactions** (subscriptions) + read APIs | ✅ **done, verified live** |
+| **9** | **Manual Assets & Liabilities**: user-entered off-platform net worth (not Plaid-synced) | ✅ **done, verified live** |
+| **10** | **Budgets**: monthly spend limit per Plaid category vs. actual spend | ✅ **done, verified live** |
+| **11** | **Transaction notes/tags/category overrides/splits** | ✅ **done, verified live** |
+| **12** | **Goals**: savings-target / debt-payoff tracking, optionally linked to a live account | ✅ **done, verified live** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -410,8 +414,9 @@ are already in place:
      becomes undecryptable and every connected item must be re-linked.
 
 2. **User authentication.** [supabase-jwt.guard.ts](../apps/api/src/auth/supabase-jwt.guard.ts)
-   verifies the `Authorization: Bearer <token>` JWT that Supabase issues at login, using
-   `SUPABASE_JWT_SECRET` (HS256, via `jose`). On success it sets `req.user = { id, email }`.
+   verifies the `Authorization: Bearer <token>` JWT that Supabase issues at login against
+   `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` (ES256 asymmetric signing keys, via `jose`'s
+   `createRemoteJWKSet`). On success it sets `req.user = { id, email }`.
    The `id` is the Supabase user's UUID — the same value that keys `profiles`. Any controller
    touching user data is annotated `@UseGuards(SupabaseJwtGuard)`, and reads the user via the
    `@CurrentUser()` decorator.
@@ -576,8 +581,7 @@ Template lives in [.env.example](../apps/api/.env.example); real values go in
 |---|---|
 | `DATABASE_URL` | Supabase **pooled** connection (port 6543) — app queries |
 | `DIRECT_URL` | Supabase **direct** connection (port 5432) — migrations |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase Auth (wired later for real login) |
-| `SUPABASE_JWT_SECRET` | verifies user login JWTs (used by the guard now) |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | Supabase Auth; `SUPABASE_URL` also verifies user login JWTs via its JWKS endpoint |
 | `PLAID_ENV` | `sandbox` today, `production` at launch |
 | `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid API credentials |
 | `PLAID_WEBHOOK_URL` | public HTTPS URL Plaid posts webhooks to (Phase 3; a tunnel in dev) |
@@ -1052,3 +1056,249 @@ first (recurring depends on them), and proved:
   increase total debt; unhiding restored it.
 - **Idempotency**: a second sync of each left liability (3) and stream (8) counts unchanged (both
   replaced wholesale). Then it purged cleanly.
+
+## 22. Phase 9 in depth — Manual Assets & Liabilities
+
+The first non-Plaid domain: user-entered, off-platform net-worth items (real estate, vehicles,
+cash, crypto, or a manual debt) that aren't behind any bank login. Unlike every prior domain,
+these rows have no `PlaidItem`/`Account` to hang off of — they're owned directly by `userId`.
+
+### 22.1 Data model — 1 new table
+
+- **manual_assets** — `userId` (direct FK to `Profile`, cascade — the first table scoped this way
+  instead of transitively through `Account`), `name`, `kind` (`asset` | `liability`), `category`
+  (`real_estate | vehicle | cash | crypto | other_asset | loan | credit_debt | other_liability`),
+  `currentValue` (Decimal 20,4), `currency`, `notes`. No sync/replace semantics — this is plain
+  user CRUD, not a Plaid-derived snapshot.
+
+### 22.2 API
+
+[manual-assets module](../apps/api/src/manual-assets/): `GET/POST /api/manual-assets`,
+`PATCH/DELETE /api/manual-assets/:id`, all guarded, ownership checked via a direct `userId` column
+match (not a relation chain). `create()` calls the same `ensureProfile()` upsert
+`dashboard.service.ts` uses, since a brand-new user may not have a `Profile` row yet — manual
+assets can be the *first* thing a user ever creates, before connecting any bank.
+
+`GET` returns `{ assets, liabilities, totals: { assetsValue, liabilitiesValue, currency } }` —
+split by `kind`, not a flat list.
+
+### 22.3 Net worth integration
+
+[aggregations.service.ts](../apps/api/src/aggregations/aggregations.service.ts) `netWorth()` now
+sums `ManualAsset` rows (grouped by `kind`) alongside the Plaid account aggregates. **The
+historical `series` stays Plaid-accounts-only** — manual entries have no daily snapshot table, so
+editing one only shifts *today's* point, not the past. Documented as a deliberate v1 boundary, not
+a bug.
+
+### 22.4 Web
+
+New page `/manual-assets` ("Assets & Liabilities" in the sidebar), two sections (Assets /
+Liabilities), inline delete-confirm (matching the existing `settings.tsx` pattern), and a dashboard
+widget (`manual_assets`, disabled by default). This phase also **introduced Radix Dialog + zod** as
+the app's first real "Add/Edit" form pattern (`components/ui/dialog.tsx`,
+`components/ui/form-field.tsx`) — both packages were installed but unused before this.
+
+One gap this phase fixed: [app-shell.tsx](../apps/web/src/routes/app-shell.tsx) previously gated
+**every** route behind "connect at least one Plaid item first" (`OnboardingRoute`), which made
+manual assets unreachable for a user who never connects a bank — directly contradicting the
+feature's purpose. `/manual-assets` and `/settings` are now exempt from that gate, and the
+onboarding screen links to `/manual-assets` as an explicit alternative path.
+
+### 22.5 Proof (live)
+
+`pnpm --filter @fin/api e2e:manual-assets`: created a manual asset with no `Profile` row yet
+(confirmed `ensureProfile()` ran), created a liability, confirmed the list splits by kind with
+correct totals, confirmed net worth reflects them exactly with zero Plaid items connected, then
+connected a real sandbox item and confirmed net worth shifted by **exactly** the Plaid-only amount
+plus the manual net (assets `536541.7405`, liabilities `138994.06`) — an update to the asset's
+value shifted net worth by exactly that delta, another user could not read/edit/delete it
+(`NotFoundException`), and deleting both reverted net worth to Plaid-only exactly.
+
+Also verified in a real browser (Playwright, session injected via the Supabase Admin API to avoid
+the sign-up form's email-domain validation): add/edit dialog, zod catching an invalid amount
+inline, cancel-then-confirm delete, and the onboarding-gate fix — all with zero console errors.
+
+## 23. Phase 10 in depth — Budgets
+
+A single recurring monthly limit per Plaid personal-finance-category primary value — no per-month
+history table. "This month's actual spend" is never stored; it's computed on every read from
+`AggregationsService.spendingByCategory()`, the same method the Spending page already uses.
+
+### 23.1 Data model — 1 new table
+
+- **budgets** — `userId` (direct FK, like `manual_assets`), `category` (validated against
+  `PLAID_PRIMARY_CATEGORIES` in `@fin/shared` — Plaid's 17 fixed PFC primary values), `monthlyLimit`,
+  `currency`. `@@unique([userId, category])` — one budget per category per user, upserted by
+  category rather than a generated id.
+
+### 23.2 API
+
+[budgets module](../apps/api/src/budgets/): imports `AggregationsModule` and calls
+`spendingByCategory()` directly rather than re-deriving spend — `BudgetsService.list()` merges the
+user's `Budget` rows with that month's category totals into `{category, monthlyLimit, spent,
+remaining, percentUsed}`. `PUT /api/budgets/:category` upserts by category (create-or-replace, no
+separate create/update split); `DELETE /api/budgets/:category` removes one. `GET
+/api/budgets?month=YYYY-MM` defaults to the current calendar month.
+
+### 23.3 Web
+
+New page `/budgets`, per-category progress bars (green under 80%, amber 80–100%, red over), and a
+dashboard widget. The "Set a budget" dialog only offers categories that actually represent spend —
+`INCOME` and `TRANSFER_IN` are excluded from the picker (`BUDGETABLE_CATEGORIES` in
+[lib/schemas/budget.ts](../apps/web/src/lib/schemas/budget.ts)), since `spendingByCategory()` only
+sums outflow (`amount > 0`) and a budget on a pure-inflow category would always read "$0 spent" —
+caught during browser verification, not designed in upfront.
+
+**A real bug this phase surfaced and fixed:** `PLAID_PRIMARY_CATEGORIES` was the first runtime
+(non-type) value ever imported from `@fin/shared` into `apps/web` — every prior shared import was
+either a TypeScript type/interface (erased at compile time) or a value nobody had actually
+imported yet. Vite serves a workspace-linked package's build as-is over `/@fs/` without running it
+through the CJS→ESM interop it normally applies via esbuild's dependency pre-bundler, so the named
+export silently failed to resolve at runtime (blank page, `does not provide an export named
+'PLAID_PRIMARY_CATEGORIES'`) — this would have broken on **any** real value import from `@fin/shared`,
+not just this one. Fixed by adding `@fin/shared` to `optimizeDeps.include` in
+[vite.config.ts](../apps/web/vite.config.ts), forcing it through the pre-bundler. This was a
+pre-existing gap in the frontend's setup, not a regression.
+
+### 23.4 Proof (live)
+
+`pnpm --filter @fin/api e2e:budgets`: connected a sandbox item, synced real transactions, budgeted
+the largest spend category at 2x its actual spend, and confirmed `spent` matched the raw
+aggregation exactly, `remaining = limit - spent`, and `percentUsed ≈ 50%`; a second category with no
+spend showed `spent = 0`; re-upserting the same category updated the limit in place (no duplicate
+row); deleting both left an empty list.
+
+Also verified in a real browser against a seeded user with real synced sandbox transactions: set a
+budget, edited its limit, watched the progress bar respond — zero console errors after the Vite fix
+above.
+
+## 24. Phase 11 in depth — Transaction Notes, Tags, Category Overrides & Splits
+
+The highest-risk phase of the four (§9–12) — the only one touching the existing Plaid sync hot
+path. The whole design turns on one guarantee, confirmed by reading the code before writing any of
+it: `sync.service.ts`'s `applyChanges()` builds its upsert `update` payload exclusively from
+`mapPlaidTransaction()`'s narrow `TransactionRecord` return shape (`accountId,
+plaidTransactionId, amount, currency, date, authorizedDate, name, merchantName, pending,
+pfcPrimary, pfcDetailed, paymentChannel`). Prisma's `update` only touches keys present in that
+object — so any column **not added to that mapper** is structurally immune to being clobbered by a
+resync. New user-edit fields therefore live on two child tables, never on `Transaction` itself.
+
+### 24.1 Data model — 2 new tables
+
+- **transaction_details** — 1:1 (`@unique transactionId`), created lazily on first edit: `note`,
+  `categoryOverride`, `tags` (native `String[]`, no separate `Tag` table in v1 — ships
+  tagging/filtering without building tag rename/autocomplete management; a normalized table is a
+  natural follow-up if usage shows the need).
+- **transaction_splits** — 1:many, cascade from `Transaction`. The parent's `amount` stays the
+  source of truth for the account total; split amounts must sum to it exactly, enforced in
+  `TransactionsService` (not a DB constraint — Postgres check constraints can't easily span rows).
+  Replaced wholesale on every edit (`deleteMany` + `createMany`), the same idiom
+  `liabilities-sync.service.ts` already uses.
+
+**Known limitation, documented not solved:** Plaid's `removed` list does a hard `deleteMany` on
+transactions (e.g. a pending transaction posting gets a new `plaidTransactionId`). Because both
+child tables cascade-delete with their parent, tags/notes on a pending transaction are lost when it
+posts. No existing code in this app solves this for any field today; out of scope for v1.
+
+### 24.2 API
+
+Extended `apps/api/src/transactions/` (no new module — same domain):
+
+| Endpoint | Does |
+|---|---|
+| `PATCH /transactions/:id` | Upserts `TransactionDetail` — `note`/`categoryOverride`/`tags`, all optional (PATCH semantics: a field absent from the body is untouched, sent as `null` clears it) |
+| `PUT /transactions/:id/splits` | Full replacement set; rejects with 400 if amounts don't sum to the transaction's amount |
+| `DELETE /transactions/:id/splits` | Clears all splits — back to unsplit |
+
+`toTransactionDto()` now includes `detail`/`splits`; `category.primary` reflects
+`detail?.categoryOverride ?? pfcPrimary`. `ListTransactionsQuery.category` matches either the
+Plaid category or a user override (`OR` clause) so a category filter still finds a recategorized
+transaction; a new `tags` query param (`hasSome`) filters by tag.
+
+`AggregationsService.spendingByCategory()` keeps its `groupBy(pfcPrimary)` for the common case,
+then separately fetches only transactions with a category override and moves their amount from the
+original Plaid bucket to the override bucket in JS — avoids a raw-SQL rewrite of the whole method
+since the override subset is expected to be small. **Splits do not feed this aggregate in v1** — a
+split transaction's total still counts under its own single category; that's an explicit scope
+boundary, not an oversight.
+
+### 24.3 Web
+
+`routes/transactions.tsx`: clicking a row expands an inline edit panel below it (not a dialog —
+in-context edit, not an "Add X" flow) with a note textarea, tag chips, and a category-override
+`<select>`. A "Split transaction" action opens the Dialog+zod pattern from Phase 9
+(`components/transactions/transaction-row-detail.tsx`): a dynamic list of amount+category rows
+with a live "$X left to allocate" / "Fully allocated ✓" indicator, submit disabled until it
+balances exactly.
+
+### 24.4 Proof (live)
+
+`pnpm --filter @fin/api e2e:transaction-details`: synced real sandbox transactions, PATCHed a
+note/tags/category-override onto one, confirmed the read API and the category/tag filters reflect
+it, confirmed `spendingByCategory` moved the amount to the override bucket, **re-ran
+`sync.syncItem()` and confirmed the note/tags/override all survived** (the core guarantee), then
+confirmed mismatched split amounts are rejected (400), matching amounts are accepted and read back
+summing to the original, and clearing removes them.
+
+Also verified in a real browser: expanded a row, saved a note/tag/category override, confirmed it
+rendered in the collapsed row (📝 note preview, tag pill, updated category column) and persisted
+across a page reload, then split the same transaction 50/50 in the dialog (watched the remaining-
+to-allocate indicator update live, submit correctly disabled until balanced) and confirmed via the
+API that both split lines persisted — zero console errors throughout.
+
+## 25. Phase 12 in depth — Goals
+
+The simplest and lowest-risk of the four §9–12 phases, closing out the plan. No new aggregation
+wiring, no sync-pipeline interaction — a goal's progress is entirely computed on read.
+
+### 25.1 Data model — 1 new table
+
+- **goals** — `userId` (direct FK, like `manual_assets`/`budgets`), `name`, `kind` (`savings` |
+  `debt_payoff`), `targetAmount`, `targetDate` (optional), `linkedAccountId` (optional FK ->
+  `Account`, **`onDelete: SetNull`** — the one relation in this schema that intentionally survives
+  its parent's removal, since a goal shouldn't vanish just because the account backing it gets
+  disconnected), `currentAmountOverride` (used only when unlinked).
+
+### 25.2 API
+
+[goals module](../apps/api/src/goals/): standard CRUD (`GET/POST /goals`,
+`PATCH/DELETE /goals/:id`), ownership via direct `userId`, `create()`/`update()` reject linking to
+an account the caller doesn't own (`assertAccountOwned` — otherwise a user could link a goal to
+someone else's account and read their balance through `currentAmount`). `toGoalDto()`
+(`goal.dto.ts`) computes `currentAmount`/`progressPercent` from whichever source applies:
+
+- Linked + `savings`: `currentAmount` = the account's live `currentBalance`.
+- Linked + `debt_payoff`: `currentAmount` = `targetAmount - currentBalance` (amount **paid down**,
+  not the remaining balance — a debt-payoff goal's progress bar should fill up as the balance
+  drops).
+- Unlinked: `currentAmount` = `currentAmountOverride` (or `0` if never set).
+
+### 25.3 Web
+
+New page `/goals` (card grid, one card per goal, progress bar + target-date line), exempted from
+the onboarding gate alongside `/manual-assets` since an unlinked goal needs no Plaid connection.
+"Add goal" Dialog+zod form: a kind toggle, target amount/date, and a linked-account `<select>`
+(from `useAccounts()`) that conditionally hides the "current amount" field when a link is chosen —
+PATCH semantics send an explicit empty string to unlink, matching the `UpdateGoalDto` convention.
+
+### 25.4 Proof (live)
+
+`pnpm --filter @fin/api e2e:goals`: connected a sandbox item, created a savings goal linked to a
+real account and confirmed `currentAmount` tracked its live balance exactly; created an unlinked
+debt-payoff goal, bumped `currentAmountOverride` twice and confirmed `progressPercent` math each
+time; confirmed another user sees zero goals, can't edit this user's goal, and can't link a goal to
+an account they don't own; **removed the linked account's Plaid item and confirmed the goal
+survived with `linkedAccountId` set to `null`** (SetNull, not cascade-deleted) and its
+`currentAmount` correctly fell back to `0`; deleted both goals.
+
+Also verified in a real browser: added a goal linked to a real synced account (progress bar showed
+"Goal reached 🎉" past 100%, since the linked balance already exceeded the small test target),
+added an unlinked debt-payoff goal at 25%, and confirmed the edit dialog correctly pre-fills a
+goal's existing kind/amount/linked-account when reopened — zero console errors.
+
+---
+
+Phases 9–12 close out the "one-stop-shop" plan: manual assets/liabilities, budgets, transaction
+notes/tags/splits, and goals. Alerts (rule-based notifications) remain the one explicitly
+out-of-scope item from that plan — it needs new notification/email infrastructure this repo
+doesn't have yet.

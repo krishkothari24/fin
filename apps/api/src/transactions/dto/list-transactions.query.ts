@@ -41,6 +41,12 @@ export class ListTransactionsQuery {
   @IsBoolean()
   pending?: boolean;
 
+  /** Comma-separated tag names; matches transactions with any of them. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.split(",").filter(Boolean) : value))
+  @IsString({ each: true })
+  tags?: string[];
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

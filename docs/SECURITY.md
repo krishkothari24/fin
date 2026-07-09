@@ -73,8 +73,8 @@ per-request transaction, so it is a conscious future trade, not a default.
 
 - All secrets live in `apps/api/.env` (gitignored) or the host's secret store.
   **Never** commit them or paste them in chat. `.env.example` documents the keys.
-- `ENCRYPTION_KEY`, `PLAID_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `SUPABASE_JWT_SECRET`, and the DB URLs are the sensitive set.
+- `ENCRYPTION_KEY`, `PLAID_SECRET`, `SUPABASE_SECRET_KEY`, and the DB URLs are the sensitive set.
+  (User JWTs are verified against Supabase's public JWKS endpoint — no shared secret involved.)
 - Plaid `access_token`s are only ever stored encrypted and never sent to a client.
 
 ## Go-to-production checklist (human-in-the-loop — not automatable here)

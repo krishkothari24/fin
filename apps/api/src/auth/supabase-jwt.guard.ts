@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 export interface AuthUser {
   id: string;
@@ -13,12 +13,16 @@ export interface AuthUser {
 }
 
 /**
- * Verifies the Supabase-issued user JWT (HS256, signed with SUPABASE_JWT_SECRET)
- * on the `Authorization: Bearer <token>` header and attaches `req.user`.
+ * Verifies the Supabase-issued user JWT (ES256, signed with Supabase's asymmetric
+ * JWT signing keys) against `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` on the
+ * `Authorization: Bearer <token>` header and attaches `req.user`.
  * Apply on any controller that touches user-scoped data.
  */
 @Injectable()
 export class SupabaseJwtGuard implements CanActivate {
+  // Cached per SUPABASE_URL: createRemoteJWKSet handles its own key caching/refresh.
+  private jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
+
   constructor(private readonly config: ConfigService) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -27,15 +31,15 @@ export class SupabaseJwtGuard implements CanActivate {
     if (!header?.startsWith("Bearer ")) {
       throw new UnauthorizedException("Missing bearer token");
     }
-    const secret = this.config.get<string>("SUPABASE_JWT_SECRET");
-    if (!secret) {
-      throw new UnauthorizedException("Auth is not configured (SUPABASE_JWT_SECRET)");
+    const supabaseUrl = this.config.get<string>("SUPABASE_URL");
+    if (!supabaseUrl) {
+      throw new UnauthorizedException("Auth is not configured (SUPABASE_URL)");
+    }
+    if (!this.jwks) {
+      this.jwks = createRemoteJWKSet(new URL("/auth/v1/.well-known/jwks.json", supabaseUrl));
     }
     try {
-      const { payload } = await jwtVerify(
-        header.slice(7),
-        new TextEncoder().encode(secret),
-      );
+      const { payload } = await jwtVerify(header.slice(7), this.jwks);
       if (!payload.sub) throw new Error("no sub");
       req.user = { id: payload.sub, email: payload.email as string | undefined };
       return true;
