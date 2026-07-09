@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #0a0e16; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    * { box-sizing: border-box; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes shimmer { 0% { opacity: 0.5; } 50% { opacity: 0.9; } 100% { opacity: 0.5; } }
+  </style>
+</helmet>
+
+<sc-if value="{{ isSignin }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex; align-items:center; justify-content:center; height:100vh; width:100%; background:#0a0e16; color:#F2F4F8;">
+    <div style="width:100%; max-width:380px; padding:0 24px;">
+      <div style="display:flex; align-items:center; gap:9px; justify-content:center; margin-bottom:32px;">
+        <div style="width:30px; height:30px; border-radius:50%; background:#3B82F6; display:flex; align-items:center; justify-content:center;"><div style="width:11px; height:11px; background:#0a0e16; transform:rotate(45deg); border-radius:2px;"></div></div>
+        <div style="font-weight:700; font-size:19px; letter-spacing:-0.01em;">fin</div>
+      </div>
+      <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:30px 28px;">
+        <div style="font-size:17px; font-weight:700; margin-bottom:4px;">{{ authTitle }}</div>
+        <div style="font-size:12.5px; color:#7A8394; margin-bottom:22px;">{{ authSubtitle }}</div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <div style="font-size:12px; color:#9AA4B2; margin-bottom:6px; font-weight:500;">Email</div>
+            <input type="email" placeholder="you@example.com" style="width:100%; background:#0a0e16; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 12px; font-size:13.5px; color:#F2F4F8; outline:none;"></input>
+          </div>
+          <div>
+            <div style="font-size:12px; color:#9AA4B2; margin-bottom:6px; font-weight:500;">Password</div>
+            <input type="password" placeholder="••••••••" style="width:100%; background:#0a0e16; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 12px; font-size:13.5px; color:#F2F4F8; outline:none;"></input>
+          </div>
+          <sc-if value="{{ isSignupMode }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:12px; color:#9AA4B2; margin-bottom:6px; font-weight:500;">Confirm password</div>
+              <input type="password" placeholder="••••••••" style="width:100%; background:#0a0e16; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 12px; font-size:13.5px; color:#F2F4F8; outline:none;"></input>
+            </div>
+          </sc-if>
+          <div onClick="{{ onSubmitAuth }}" style="margin-top:6px; text-align:center; font-size:13.5px; font-weight:600; color:#0a0e16; background:#3B82F6; padding:11px; border-radius:8px; cursor:pointer;">{{ authButtonLabel }}</div>
+        </div>
+        <div style="text-align:center; margin-top:18px; font-size:12.5px; color:#7A8394;">
+          {{ authSwitchPrompt }} <span onClick="{{ onToggleAuthMode }}" style="color:#3B82F6; font-weight:600; cursor:pointer;">{{ authSwitchAction }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex; align-items:center; justify-content:center; height:100vh; width:100%; background:#0a0e16; color:#F2F4F8;">
+    <div style="width:100%; max-width:460px; padding:0 24px; text-align:center;">
+      <div style="width:56px; height:56px; border-radius:16px; background:rgba(59,130,246,0.12); display:flex; align-items:center; justify-content:center; margin:0 auto 22px auto;">
+        <div style="width:22px; height:22px; border-radius:6px; border:2.5px solid #3B82F6;"></div>
+      </div>
+      <div style="font-size:21px; font-weight:700; letter-spacing:-0.01em; margin-bottom:8px;">Connect your first account</div>
+      <div style="font-size:13.5px; color:#7A8394; line-height:1.6; margin-bottom:26px;">Link a bank, credit card, or investment account to see your net worth, spending, and cash flow in one place. We never see your bank credentials.</div>
+      <div style="display:flex; flex-direction:column; gap:10px; text-align:left; background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px 20px; margin-bottom:26px;">
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#C4CBD6;"><div style="width:5px; height:5px; border-radius:50%; background:#34D399; flex-shrink:0;"></div>Read-only — we never move your money</div>
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#C4CBD6;"><div style="width:5px; height:5px; border-radius:50%; background:#34D399; flex-shrink:0;"></div>See net worth, spending, and cash flow instantly</div>
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#C4CBD6;"><div style="width:5px; height:5px; border-radius:50%; background:#34D399; flex-shrink:0;"></div>Connect as many institutions as you like</div>
+      </div>
+      <div onClick="{{ onConnectFirstAccount }}" style="display:inline-block; font-size:13.5px; font-weight:600; color:#0a0e16; background:#3B82F6; padding:12px 24px; border-radius:9px; cursor:pointer;">Connect an account</div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isAppShell }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex; height:100vh; width:100%; background:#0a0e16; color:#F2F4F8; overflow:hidden;">
+
+  <!-- SIDEBAR -->
+  <div style="width:248px; min-width:248px; background:#0b0f19; border-right:1px solid rgba(255,255,255,0.07); display:flex; flex-direction:column; padding:20px 14px;">
+    <div style="display:flex; align-items:center; gap:9px; padding:6px 10px 22px 10px;">
+      <div style="width:26px; height:26px; border-radius:50%; background:#3B82F6; display:flex; align-items:center; justify-content:center;"><div style="width:9px; height:9px; background:#0a0e16; transform:rotate(45deg); border-radius:2px;"></div></div>
+      <div style="font-weight:700; font-size:16px; letter-spacing:-0.01em; color:#F2F4F8;">fin</div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:2px; flex:1; overflow-y:auto;">
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="10">
+        <div
+          onClick="{{ item.onClick }}"
+          style="display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-radius:8px; cursor:pointer; font-size:13.5px; font-weight:500;"
+          style-hover="{{ item.hoverStyle }}"
+        >
+          <span>{{ item.label }}</span>
+          <sc-if value="{{ item.showSoon }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:9.5px; font-weight:600; letter-spacing:0.03em; color:#565F70; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:5px;">SOON</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px; padding:12px 10px; margin-top:8px; border-top:1px solid rgba(255,255,255,0.07);">
+      <div style="width:28px; height:28px; border-radius:50%; background:#1a2233; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#9AA4B2; flex-shrink:0;">JD</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; font-weight:600; color:#F2F4F8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Jordan Diaz</div>
+        <div style="font-size:11px; color:#565F70;">Signed in</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; position:relative;">
+
+    <!-- Global status banner -->
+    <sc-if value="{{ hasBanner }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:11px 28px; background:rgba(245,158,11,0.1); border-bottom:1px solid rgba(245,158,11,0.25);">
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#F59E0B;">
+          <div style="width:6px; height:6px; border-radius:50%; background:#F59E0B; flex-shrink:0;"></div>
+          <span style="color:#E8B96C;">{{ bannerText }}</span>
+        </div>
+        <div onClick="{{ reauthFromBanner }}" style="font-size:12.5px; font-weight:600; color:#0a0e16; background:#F59E0B; padding:6px 14px; border-radius:7px; cursor:pointer; white-space:nowrap;" style-hover="{{ amberHover }}">Reconnect</div>
+      </div>
+    </sc-if>
+
+    <div style="flex:1; overflow-y:auto; padding:28px 32px 48px 32px;">
+
+      <!-- ============ DASHBOARD ============ -->
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="animation: fadeIn 0.25s ease;">
+          <div style="margin-bottom:22px;">
+            <div style="font-size:20px; font-weight:700; letter-spacing:-0.01em;">Dashboard</div>
+            <div style="font-size:13px; color:#7A8394; margin-top:3px;">Here's where things stand today.</div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px;">
+
+            <!-- Net worth (spans 2) -->
+            <div style="grid-column: span 2; background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:22px 24px;">
+              <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+                <div>
+                  <div style="font-size:12.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Net Worth</div>
+                  <div style="font-size:32px; font-weight:700; margin-top:8px; font-variant-numeric:tabular-nums; letter-spacing:-0.02em;">{{ netWorthFormatted }}</div>
+                  <div style="display:flex; gap:18px; margin-top:14px;">
+                    <div>
+                      <div style="font-size:11px; color:#565F70;">Assets</div>
+                      <div style="font-size:14px; font-weight:600; color:#34D399; font-variant-numeric:tabular-nums;">{{ assetsFormatted }}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:11px; color:#565F70;">Liabilities</div>
+                      <div style="font-size:14px; font-weight:600; color:#F87171; font-variant-numeric:tabular-nums;">{{ liabilitiesFormatted }}</div>
+                    </div>
+                  </div>
+                </div>
+                <svg width="200" height="64" viewBox="0 0 200 64" style="flex-shrink:0;">
+                  <polyline points="{{ sparklinePoints }}" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Accounts widget -->
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:20px 22px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                <div style="font-size:12.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Accounts</div>
+                <div onClick="{{ goAccounts }}" style="font-size:12px; color:#3B82F6; cursor:pointer; font-weight:600;" style-hover="{{ linkHover }}">View all</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:11px;">
+                <sc-for list="{{ dashboardAccounts }}" as="acc" hint-placeholder-count="4">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+                      <div style="width:26px; height:26px; border-radius:7px; background:{{ acc.badgeBg }}; display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:700; color:#0a0e16; flex-shrink:0;">{{ acc.initials }}</div>
+                      <div style="min-width:0;">
+                        <div style="font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acc.name }}</div>
+                        <div style="font-size:11px; color:#565F70;">•••• {{ acc.mask }}</div>
+                      </div>
+                    </div>
+                    <div style="font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; flex-shrink:0;">{{ acc.balanceFormatted }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- Spending widget -->
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:20px 22px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                <div style="font-size:12.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Spending by Category</div>
+                <div style="font-size:11px; color:#565F70;">Last 30 days</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <sc-for list="{{ spendingCategories }}" as="cat" hint-placeholder-count="5">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:5px;">
+                      <span style="color:#C4CBD6;">{{ cat.category }}</span>
+                      <span style="font-weight:600; font-variant-numeric:tabular-nums;">{{ cat.amountFormatted }}</span>
+                    </div>
+                    <div style="height:6px; border-radius:4px; background:rgba(255,255,255,0.05); overflow:hidden;">
+                      <div style="height:100%; width:{{ cat.pct }}%; background:#3B82F6; border-radius:4px;"></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- Recent transactions widget -->
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:20px 22px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <div style="font-size:12.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Recent Transactions</div>
+                <div onClick="{{ goTransactions }}" style="font-size:12px; color:#3B82F6; cursor:pointer; font-weight:600;" style-hover="{{ linkHover }}">View all</div>
+              </div>
+              <div style="display:flex; flex-direction:column;">
+                <sc-for list="{{ recentTransactions }}" as="tx" hint-placeholder-count="5">
+                  <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <div style="min-width:0;">
+                      <div style="font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tx.name }}</div>
+                      <div style="font-size:11px; color:#565F70;">{{ tx.dateLabel }}<sc-if value="{{ tx.pending }}" hint-placeholder-val="{{ false }}"> · <span style="color:#F59E0B;">Pending</span></sc-if></div>
+                    </div>
+                    <div style="font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:{{ tx.amountColor }}; flex-shrink:0;">{{ tx.amountText }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- Cash flow widget -->
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:20px 22px;">
+              <div style="font-size:12.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:16px;">Cash Flow</div>
+              <div style="display:flex; align-items:flex-end; gap:10px; height:110px;">
+                <sc-for list="{{ cashFlowMonths }}" as="m" hint-placeholder-count="6">
+                  <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end;">
+                    <div style="display:flex; align-items:flex-end; gap:3px; height:80px;">
+                      <div style="width:9px; background:#34D399; border-radius:3px 3px 0 0; height:{{ m.incomeHeightPct }}%;"></div>
+                      <div style="width:9px; background:#565F70; border-radius:3px 3px 0 0; height:{{ m.outflowHeightPct }}%;"></div>
+                    </div>
+                    <div style="font-size:10px; color:#565F70;">{{ m.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; gap:16px; margin-top:12px; font-size:11px; color:#7A8394;">
+                <div style="display:flex; align-items:center; gap:5px;"><div style="width:7px;height:7px;border-radius:2px;background:#34D399;"></div>Income</div>
+                <div style="display:flex; align-items:center; gap:5px;"><div style="width:7px;height:7px;border-radius:2px;background:#565F70;"></div>Outflow</div>
+              </div>
+            </div>
+
+            <!-- Liabilities widget (overdue demo) -->
+            <div style="grid-column: span 2; background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:20px 22px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                <div style="font-size:12.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Liabilities</div>
+                <div style="display:flex; gap:20px; font-size:12px; color:#7A8394;">
+                  <span>Total debt <b style="color:#F2F4F8; font-variant-numeric:tabular-nums;">{{ liabWidget.totalDebtFormatted }}</b></span>
+                  <span>Min. due <b style="color:#F2F4F8; font-variant-numeric:tabular-nums;">{{ liabWidget.minDueFormatted }}</b></span>
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <sc-for list="{{ liabWidget.items }}" as="li" hint-placeholder-count="2">
+                  <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:9px; background:{{ li.rowBg }};">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <sc-if value="{{ li.isOverdue }}" hint-placeholder-val="{{ false }}">
+                        <div style="width:6px; height:6px; border-radius:50%; background:#F59E0B;"></div>
+                      </sc-if>
+                      <div>
+                        <div style="font-size:13px; font-weight:500;">{{ li.name }} <span style="color:#565F70; font-weight:400;">•••• {{ li.mask }}</span></div>
+                        <div style="font-size:11px; color:{{ li.dueColor }}; margin-top:2px;">{{ li.dueLabel }}</div>
+                      </div>
+                    </div>
+                    <div style="font-size:13px; font-weight:600; font-variant-numeric:tabular-nums;">{{ li.balanceFormatted }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ ACCOUNTS ============ -->
+      <sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ false }}">
+        <div style="animation: fadeIn 0.25s ease;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px;">
+            <div>
+              <div style="font-size:20px; font-weight:700; letter-spacing:-0.01em;">Accounts</div>
+              <div style="font-size:13px; color:#7A8394; margin-top:3px;">All connected institutions and accounts.</div>
+            </div>
+            <div onClick="{{ connectAccount }}" style="font-size:13px; font-weight:600; color:#0a0e16; background:#3B82F6; padding:9px 16px; border-radius:8px; cursor:pointer; white-space:nowrap;" style-hover="{{ blueHover }}">+ Connect another account</div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <sc-for list="{{ institutionGroups }}" as="grp" hint-placeholder-count="3">
+              <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="font-size:14px; font-weight:600;">{{ grp.institutionName }}</div>
+                    <div style="font-size:10.5px; font-weight:700; letter-spacing:0.03em; padding:3px 8px; border-radius:6px; background:{{ grp.statusBg }}; color:{{ grp.statusColor }};">{{ grp.statusLabel }}</div>
+                  </div>
+                  <sc-if value="{{ grp.needsReauth }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ grp.onReauth }}" style="font-size:12px; font-weight:600; color:#F59E0B; cursor:pointer;" style-hover="{{ amberLinkHover }}">Reconnect →</div>
+                  </sc-if>
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                  <sc-for list="{{ grp.accounts }}" as="acc" hint-placeholder-count="2">
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.03); opacity:{{ acc.rowOpacity }};">
+                      <div style="min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <div style="font-size:13.5px; font-weight:500;">{{ acc.name }}</div>
+                          <div style="font-size:10px; color:#565F70; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:5px;">{{ acc.subtype }}</div>
+                          <sc-if value="{{ acc.isHidden }}" hint-placeholder-val="{{ false }}">
+                            <div style="font-size:10px; color:#F87171; background:rgba(248,113,113,0.1); padding:2px 6px; border-radius:5px;">Excluded from totals</div>
+                          </sc-if>
+                        </div>
+                        <div style="font-size:11.5px; color:#565F70; margin-top:2px;">•••• {{ acc.mask }}</div>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:18px;">
+                        <div style="font-size:14px; font-weight:600; font-variant-numeric:tabular-nums;">{{ acc.balanceFormatted }}</div>
+                        <div style="display:flex; align-items:center; gap:14px;">
+                          <div onClick="{{ acc.onToggleDashboardHide }}" title="Toggle dashboard card visibility" style="font-size:11px; color:{{ acc.dashHideColor }}; cursor:pointer; font-weight:500; white-space:nowrap;">{{ acc.dashHideLabel }}</div>
+                          <div onClick="{{ acc.onToggleHidden }}" title="Toggle exclusion from totals" style="width:34px; height:19px; border-radius:10px; background:{{ acc.switchBg }}; position:relative; cursor:pointer; flex-shrink:0;">
+                            <div style="width:15px; height:15px; border-radius:50%; background:#F2F4F8; position:absolute; top:2px; left:{{ acc.switchPos }}px; transition:left 0.15s ease;"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SETTINGS ============ -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="animation: fadeIn 0.25s ease; display:flex; gap:28px;">
+          <div style="width:190px; flex-shrink:0; display:flex; flex-direction:column; gap:3px;">
+            <div style="font-size:20px; font-weight:700; letter-spacing:-0.01em; margin-bottom:16px;">Settings</div>
+            <div onClick="{{ setSettingsDashboardTab }}" style="padding:9px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; background:{{ settingsDashboardTabStyle.background }}; color:{{ settingsDashboardTabStyle.color }};">Dashboard</div>
+            <div onClick="{{ setSettingsConnectedTab }}" style="padding:9px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; background:{{ settingsConnectedTabStyle.background }}; color:{{ settingsConnectedTabStyle.color }};">Connected Accounts</div>
+            <div onClick="{{ setSettingsProfileTab }}" style="padding:9px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; background:{{ settingsProfileTabStyle.background }}; color:{{ settingsProfileTabStyle.color }};">Profile</div>
+          </div>
+
+          <div style="flex:1; min-width:0; max-width:640px;">
+
+            <sc-if value="{{ isSettingsDashboard }}" hint-placeholder-val="{{ true }}">
+              <div>
+                <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px 20px; margin-bottom:18px;">
+                  <div style="font-size:13.5px; font-weight:600; margin-bottom:4px;">Widgets</div>
+                  <div style="font-size:12px; color:#7A8394; margin-bottom:16px;">Choose which cards show on your home dashboard, and in what order.</div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    <sc-for list="{{ widgetRows }}" as="w" hint-placeholder-count="8">
+                      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:9px; background:rgba(255,255,255,0.02);">
+                        <div style="font-size:13px; font-weight:500;">{{ w.label }}</div>
+                        <div style="display:flex; align-items:center; gap:16px;">
+                          <div style="display:flex; gap:6px;">
+                            <div onClick="{{ w.onMoveUp }}" style="width:22px; height:22px; border-radius:6px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ w.upColor }}; font-size:11px;">▲</div>
+                            <div onClick="{{ w.onMoveDown }}" style="width:22px; height:22px; border-radius:6px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ w.downColor }}; font-size:11px;">▼</div>
+                          </div>
+                          <div onClick="{{ w.onToggle }}" style="width:34px; height:19px; border-radius:10px; background:{{ w.switchBg }}; position:relative; cursor:pointer; flex-shrink:0;">
+                            <div style="width:15px; height:15px; border-radius:50%; background:#F2F4F8; position:absolute; top:2px; left:{{ w.switchPos }}px; transition:left 0.15s ease;"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px 20px;">
+                  <div style="font-size:13.5px; font-weight:600; margin-bottom:16px;">Preferences</div>
+                  <div style="display:flex; flex-direction:column; gap:16px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                      <div>
+                        <div style="font-size:13px; font-weight:500;">Default date range</div>
+                        <div style="font-size:11.5px; color:#565F70;">Used on pages that accept a date range, until you pick one.</div>
+                      </div>
+                      <select value="{{ rangeDaysValue }}" onChange="{{ setRangeDays }}" style="background:#0a0e16; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 12px; font-size:13px; color:#F2F4F8; outline:none;">
+                        <option value="7">7 days</option>
+                        <option value="14">14 days</option>
+                        <option value="30">30 days</option>
+                        <option value="60">60 days</option>
+                        <option value="90">90 days</option>
+                      </select>
+                    </div>
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                      <div>
+                        <div style="font-size:13px; font-weight:500;">Currency</div>
+                        <div style="font-size:11.5px; color:#565F70;">Used to format every balance and amount.</div>
+                      </div>
+                      <select value="{{ currencyValue }}" onChange="{{ setCurrency }}" style="background:#0a0e16; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 12px; font-size:13px; color:#F2F4F8; outline:none;">
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="CAD">CAD</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isSettingsConnected }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <sc-for list="{{ connectedItemsRows }}" as="it" hint-placeholder-count="4">
+                  <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:14px 18px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; row-gap:10px;">
+                      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; row-gap:6px;">
+                        <div style="font-size:13.5px; font-weight:600;">{{ it.institutionName }}</div>
+                        <div style="font-size:10.5px; font-weight:700; letter-spacing:0.03em; padding:3px 8px; border-radius:6px; background:{{ it.statusBg }}; color:{{ it.statusColor }}; white-space:nowrap;">{{ it.statusLabel }}</div>
+                        <div style="font-size:11.5px; color:#565F70; white-space:nowrap;">{{ it.accountCountLabel }}</div>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                        <sc-if value="{{ it.needsReauth }}" hint-placeholder-val="{{ false }}">
+                          <div onClick="{{ it.onReauth }}" style="font-size:12px; font-weight:600; color:#F59E0B; cursor:pointer; white-space:nowrap;">Reconnect</div>
+                        </sc-if>
+                        <div onClick="{{ it.onRefresh }}" style="font-size:12px; font-weight:600; color:#3B82F6; cursor:pointer; white-space:nowrap;">Refresh</div>
+                        <div onClick="{{ it.onAskDisconnect }}" style="font-size:12px; font-weight:600; color:#7A8394; cursor:pointer; white-space:nowrap;">Disconnect</div>
+                      </div>
+                    </div>
+                    <sc-if value="{{ it.confirming }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:11px 14px; border-radius:9px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.2);">
+                        <div style="font-size:12.5px; color:#F87171;">Disconnect {{ it.institutionName }}? This removes its accounts, transactions, and history.</div>
+                        <div style="display:flex; gap:8px; flex-shrink:0;">
+                          <div onClick="{{ it.onCancelDisconnect }}" style="font-size:12px; font-weight:600; padding:6px 12px; border-radius:7px; cursor:pointer; color:#C4CBD6; background:rgba(255,255,255,0.06);">Cancel</div>
+                          <div onClick="{{ it.onConfirmDisconnect }}" style="font-size:12px; font-weight:600; padding:6px 12px; border-radius:7px; cursor:pointer; color:#0a0e16; background:#F87171;">Disconnect</div>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isSettingsProfile }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:22px 24px;">
+                <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+                  <div style="width:44px; height:44px; border-radius:50%; background:#1a2233; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:#9AA4B2;">JD</div>
+                  <div>
+                    <div style="font-size:15px; font-weight:600;">Jordan Diaz</div>
+                    <div style="font-size:12.5px; color:#7A8394;">jordan.diaz@example.com</div>
+                  </div>
+                </div>
+                <div onClick="{{ signOut }}" style="display:inline-block; font-size:13px; font-weight:600; color:#F87171; background:rgba(248,113,113,0.1); padding:9px 16px; border-radius:8px; cursor:pointer;">Sign out</div>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ INVESTMENTS ============ -->
+      <sc-if value="{{ isInvestments }}" hint-placeholder-val="{{ false }}">
+        <div style="animation: fadeIn 0.25s ease;">
+          <div style="margin-bottom:18px;">
+            <div style="font-size:20px; font-weight:700; letter-spacing:-0.01em;">Investments</div>
+            <div style="font-size:13px; color:#7A8394; margin-top:3px;">Portfolio holdings and account activity.</div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px; margin-bottom:20px;">
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px 20px;">
+              <div style="font-size:11.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Value</div>
+              <div style="font-size:22px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums;">{{ holdingsTotals.valueFormatted }}</div>
+            </div>
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px 20px;">
+              <div style="font-size:11.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Cost Basis</div>
+              <div style="font-size:22px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums;">{{ holdingsTotals.costBasisFormatted }}</div>
+            </div>
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px 20px;">
+              <div style="font-size:11.5px; color:#7A8394; font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Gain / Loss</div>
+              <div style="font-size:22px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums; color:{{ holdingsTotals.gainLossColor }};">{{ holdingsTotals.gainLossFormatted }}</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:24px; border-bottom:1px solid rgba(255,255,255,0.07); margin-bottom:18px;">
+            <div onClick="{{ setHoldingsTab }}" style="padding:0 0 12px 0; font-size:13.5px; font-weight:600; cursor:pointer; color:{{ holdingsTabStyle.color }}; border-bottom:{{ holdingsTabStyle.borderBottom }};">Holdings</div>
+            <div onClick="{{ setActivityTab }}" style="padding:0 0 12px 0; font-size:13.5px; font-weight:600; cursor:pointer; color:{{ activityTabStyle.color }}; border-bottom:{{ activityTabStyle.borderBottom }};">Activity</div>
+          </div>
+
+          <sc-if value="{{ isHoldingsTab }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; overflow-x:auto;">
+              <div style="min-width:660px;">
+                <div style="display:grid; grid-template-columns:70px 1fr 80px 90px 110px 110px 110px; padding:12px 20px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:11px; font-weight:600; color:#565F70; text-transform:uppercase; letter-spacing:0.03em;">
+                  <div>Ticker</div><div>Security</div><div style="text-align:right;">Qty</div><div style="text-align:right;">Price</div><div style="text-align:right;">Value</div><div style="text-align:right;">Cost Basis</div><div style="text-align:right;">Gain/Loss</div>
+                </div>
+                <sc-for list="{{ holdingsRows }}" as="h" hint-placeholder-count="4">
+                  <div style="display:grid; grid-template-columns:70px 1fr 80px 90px 110px 110px 110px; padding:13px 20px; border-bottom:1px solid rgba(255,255,255,0.03); align-items:center; font-size:13px;">
+                    <div style="font-weight:600; color:#3B82F6;">{{ h.ticker }}</div>
+                    <div style="color:#C4CBD6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ h.name }}</div>
+                    <div style="text-align:right; font-variant-numeric:tabular-nums; color:#9AA4B2;">{{ h.quantity }}</div>
+                    <div style="text-align:right; font-variant-numeric:tabular-nums; color:#9AA4B2;">{{ h.priceFormatted }}</div>
+                    <div style="text-align:right; font-weight:600; font-variant-numeric:tabular-nums;">{{ h.valueFormatted }}</div>
+                    <div style="text-align:right; font-variant-numeric:tabular-nums; color:#9AA4B2;">{{ h.costBasisFormatted }}</div>
+                    <div style="text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:{{ h.gainLossColor }};">{{ h.gainLossFormatted }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isActivityTab }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; overflow-x:auto;">
+              <div style="min-width:560px;">
+                <div style="display:grid; grid-template-columns:90px 1fr 90px 80px 110px; padding:12px 20px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:11px; font-weight:600; color:#565F70; text-transform:uppercase; letter-spacing:0.03em;">
+                  <div>Date</div><div>Description</div><div>Type</div><div style="text-align:right;">Qty</div><div style="text-align:right;">Amount</div>
+                </div>
+                <sc-for list="{{ activityRows }}" as="t" hint-placeholder-count="6">
+                  <div style="display:grid; grid-template-columns:90px 1fr 90px 80px 110px; padding:13px 20px; border-bottom:1px solid rgba(255,255,255,0.03); align-items:center; font-size:13px;">
+                    <div style="color:#7A8394; font-variant-numeric:tabular-nums;">{{ t.dateLabel }}</div>
+                    <div style="font-weight:500;">{{ t.name }}</div>
+                    <div style="color:#9AA4B2;">{{ t.typeLabel }}</div>
+                    <div style="text-align:right; font-variant-numeric:tabular-nums; color:#9AA4B2;">{{ t.quantity }}</div>
+                    <div style="text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:{{ t.amountColor }};">{{ t.amountText }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ TRANSACTIONS ============ -->
+      <sc-if value="{{ isTransactions }}" hint-placeholder-val="{{ false }}">
+        <div style="animation: fadeIn 0.25s ease;">
+          <div style="margin-bottom:18px;">
+            <div style="font-size:20px; font-weight:700; letter-spacing:-0.01em;">Transactions</div>
+            <div style="font-size:13px; color:#7A8394; margin-top:3px;">{{ totalFilteredCount }} transactions</div>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px;">
+            <input value="{{ searchValue }}" onChange="{{ onSearchChange }}" placeholder="Search name or merchant" style="flex:1; min-width:200px; background:#121826; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 12px; font-size:13px; color:#F2F4F8; outline:none;"></input>
+            <select value="{{ accountFilter }}" onChange="{{ onAccountFilterChange }}" style="background:#121826; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 12px; font-size:13px; color:#F2F4F8; outline:none;">
+              <sc-for list="{{ accountOptions }}" as="opt" hint-placeholder-count="4">
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+              </sc-for>
+            </select>
+            <select value="{{ categoryFilter }}" onChange="{{ onCategoryFilterChange }}" style="background:#121826; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 12px; font-size:13px; color:#F2F4F8; outline:none;">
+              <sc-for list="{{ categoryOptions }}" as="opt" hint-placeholder-count="6">
+                <option value="{{ opt.value }}">{{ opt.label }}</option>
+              </sc-for>
+            </select>
+            <select value="{{ pendingFilter }}" onChange="{{ onPendingFilterChange }}" style="background:#121826; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 12px; font-size:13px; color:#F2F4F8; outline:none;">
+              <option value="all">All statuses</option>
+              <option value="pending">Pending only</option>
+              <option value="posted">Posted only</option>
+            </select>
+            <select value="{{ rangeFilter }}" onChange="{{ onRangeFilterChange }}" style="background:#121826; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:9px 12px; font-size:13px; color:#F2F4F8; outline:none;">
+              <option value="all">All time</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+            </select>
+          </div>
+
+          <div style="background:#121826; border:1px solid rgba(255,255,255,0.06); border-radius:14px; overflow-x:auto;">
+            <div style="min-width:640px;">
+              <div style="display:grid; grid-template-columns:90px 1fr 130px 140px 110px; padding:12px 20px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:11px; font-weight:600; color:#565F70; text-transform:uppercase; letter-spacing:0.03em;">
+                <div>Date</div><div>Description</div><div>Account</div><div>Category</div><div style="text-align:right;">Amount</div>
+              </div>
+              <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ pageRows }}" as="tx" hint-placeholder-count="8">
+                  <div style="display:grid; grid-template-columns:90px 1fr 130px 140px 110px; padding:13px 20px; border-bottom:1px solid rgba(255,255,255,0.03); align-items:center; font-size:13px;">
+                    <div style="color:#7A8394; font-variant-numeric:tabular-nums;">{{ tx.dateLabel }}</div>
+                    <div style="min-width:0;">
+                      <div style="font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tx.name }}</div>
+                      <sc-if value="{{ tx.pending }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:10.5px; color:#F59E0B; font-style:italic;">Pending</div>
+                      </sc-if>
+                    </div>
+                    <div style="color:#9AA4B2;">{{ tx.accountName }}</div>
+                    <div style="color:#9AA4B2;">{{ tx.category }}</div>
+                    <div style="text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:{{ tx.amountColor }};">{{ tx.amountText }}</div>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ showEmptyState }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:56px 20px; text-align:center;">
+                  <div style="width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,0.05); margin-bottom:14px;"></div>
+                  <div style="font-size:14px; font-weight:600; color:#C4CBD6;">No transactions match your filters</div>
+                  <div style="font-size:12.5px; color:#565F70; margin-top:4px;">Try widening the date range or clearing a filter.</div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px;">
+              <div style="font-size:12px; color:#565F70;">Showing {{ pageRangeLabel }} of {{ totalFilteredCount }}</div>
+              <div style="display:flex; gap:8px;">
+                <div onClick="{{ goPrevPage }}" style="font-size:12.5px; font-weight:600; padding:7px 13px; border-radius:7px; cursor:pointer; background:#121826; border:1px solid rgba(255,255,255,0.08); color:{{ prevColor }};">Prev</div>
+                <div onClick="{{ goNextPage }}" style="font-size:12.5px; font-weight:600; padding:7px 13px; border-radius:7px; cursor:pointer; background:#121826; border:1px solid rgba(255,255,255,0.08); color:{{ nextColor }};">Next</div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <!-- toast -->
+    <sc-if value="{{ toastVisible }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:24px; right:28px; background:#1a2233; border:1px solid rgba(255,255,255,0.1); color:#F2F4F8; font-size:13px; padding:11px 16px; border-radius:9px; box-shadow:0 8px 24px rgba(0,0,0,0.4); animation: fadeIn 0.2s ease;">{{ toastText }}</div>
+    </sc-if>
+
+  </div>
+</div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ACCOUNTS_SEED = [
+  { id: 'a1', itemId: 'item1', name: 'Total Checking', mask: '4821', type: 'depository', subtype: 'checking', currentBalance: '4231.55', isHidden: false, dashHidden: false },
+  { id: 'a2', itemId: 'item1', name: 'Savings Plus', mask: '9012', type: 'depository', subtype: 'savings', currentBalance: '12004.10', isHidden: false, dashHidden: false },
+  { id: 'a6', itemId: 'item1', name: 'Auto Loan', mask: '7743', type: 'loan', subtype: 'auto loan', currentBalance: '15230.44', isHidden: false, dashHidden: false },
+  { id: 'a3', itemId: 'item2', name: 'Platinum Card', mask: '1006', type: 'credit', subtype: 'credit card', currentBalance: '2340.18', isHidden: false, dashHidden: false },
+  { id: 'a4', itemId: 'item3', name: 'Online Savings', mask: '5567', type: 'depository', subtype: 'savings', currentBalance: '8500.00', isHidden: true, dashHidden: false },
+  { id: 'a5', itemId: 'item4', name: '401(k)', mask: '3390', type: 'investment', subtype: '401k', currentBalance: '54231.00', isHidden: false, dashHidden: true },
+];
+
+const ITEMS_SEED = [
+  { id: 'item1', institutionName: 'Chase', status: 'good' },
+  { id: 'item2', institutionName: 'American Express', status: 'login_required' },
+  { id: 'item3', institutionName: 'Ally Bank', status: 'good' },
+  { id: 'item4', institutionName: 'Fidelity', status: 'good' },
+];
+
+const TRANSACTIONS = [
+  { id: 't1', accountId: 'a1', amount: '54.32', date: '2026-07-06', name: "Trader Joe's", pending: false, category: 'Food and Drink' },
+  { id: 't2', accountId: 'a3', amount: '128.00', date: '2026-07-05', name: 'Amazon', pending: false, category: 'Shops' },
+  { id: 't3', accountId: 'a1', amount: '1450.00', date: '2026-07-05', name: 'Rent Payment', pending: false, category: 'Payment' },
+  { id: 't4', accountId: 'a2', amount: '-3200.00', date: '2026-07-04', name: 'Payroll Deposit', pending: false, category: 'Income' },
+  { id: 't5', accountId: 'a1', amount: '12.50', date: '2026-07-04', name: 'Starbucks', pending: true, category: 'Food and Drink' },
+  { id: 't6', accountId: 'a3', amount: '89.99', date: '2026-07-03', name: 'Netflix', pending: false, category: 'Entertainment' },
+  { id: 't7', accountId: 'a1', amount: '220.10', date: '2026-07-02', name: 'Delta Air Lines', pending: false, category: 'Travel' },
+  { id: 't8', accountId: 'a2', amount: '-45.00', date: '2026-07-01', name: 'Venmo Refund', pending: false, category: 'Transfer' },
+  { id: 't9', accountId: 'a3', amount: '64.20', date: '2026-06-30', name: 'Uber', pending: false, category: 'Travel' },
+  { id: 't10', accountId: 'a1', amount: '32.18', date: '2026-06-29', name: 'Whole Foods', pending: false, category: 'Food and Drink' },
+  { id: 't11', accountId: 'a1', amount: '9.99', date: '2026-06-28', name: 'Spotify', pending: false, category: 'Entertainment' },
+  { id: 't12', accountId: 'a3', amount: '512.44', date: '2026-06-27', name: 'Best Buy', pending: false, category: 'Shops' },
+  { id: 't13', accountId: 'a2', amount: '-1200.00', date: '2026-06-20', name: 'Freelance Payment', pending: false, category: 'Income' },
+  { id: 't14', accountId: 'a1', amount: '18.75', date: '2026-06-18', name: 'Chipotle', pending: false, category: 'Food and Drink' },
+  { id: 't15', accountId: 'a3', amount: '76.00', date: '2026-06-15', name: 'Shell Gas', pending: false, category: 'Travel' },
+  { id: 't16', accountId: 'a1', amount: '145.00', date: '2026-06-10', name: 'Con Edison', pending: false, category: 'Payment' },
+  { id: 't17', accountId: 'a2', amount: '-3200.00', date: '2026-06-05', name: 'Payroll Deposit', pending: false, category: 'Income' },
+  { id: 't18', accountId: 'a3', amount: '22.40', date: '2026-06-02', name: 'Duane Reade', pending: false, category: 'Shops' },
+  { id: 't19', accountId: 'a1', amount: '60.00', date: '2026-05-29', name: 'Equinox', pending: false, category: 'Recreation' },
+  { id: 't20', accountId: 'a3', amount: '340.00', date: '2026-05-20', name: 'Nike', pending: false, category: 'Shops' },
+];
+
+const SPENDING = [
+  { category: 'Payment', amount: '1595.00' },
+  { category: 'Shops', amount: '1002.83' },
+  { category: 'Travel', amount: '360.30' },
+  { category: 'Food and Drink', amount: '117.75' },
+  { category: 'Entertainment', amount: '99.98' },
+];
+
+const CASH_FLOW = [
+  { month: '2026-02', income: '3200.00', outflow: '2400.00' },
+  { month: '2026-03', income: '3200.00', outflow: '2850.00' },
+  { month: '2026-04', income: '4400.00', outflow: '3120.00' },
+  { month: '2026-05', income: '3200.00', outflow: '2980.00' },
+  { month: '2026-06', income: '4400.00', outflow: '3510.00' },
+  { month: '2026-07', income: '3200.00', outflow: '1965.00' },
+];
+
+const LIABILITIES = [
+  { id: 'l1', accountId: 'a6', name: 'Auto Loan', mask: '7743', currentBalance: '15230.44', nextPaymentDueDate: '2026-06-28', isOverdue: true },
+  { id: 'l2', accountId: 'a3', name: 'Platinum Card', mask: '1006', currentBalance: '2340.18', nextPaymentDueDate: '2026-07-22', isOverdue: false },
+];
+
+const NAV_DEF = [
+  { key: 'dashboard', label: 'Dashboard', enabled: true },
+  { key: 'accounts', label: 'Accounts', enabled: true },
+  { key: 'transactions', label: 'Transactions', enabled: true },
+  { key: 'net_worth', label: 'Net Worth', enabled: false },
+  { key: 'spending', label: 'Spending', enabled: false },
+  { key: 'cash_flow', label: 'Cash Flow', enabled: false },
+  { key: 'investments', label: 'Investments', enabled: true },
+  { key: 'liabilities', label: 'Liabilities', enabled: false },
+  { key: 'recurring', label: 'Recurring', enabled: false },
+  { key: 'settings', label: 'Settings', enabled: true },
+];
+
+const DASHBOARD_WIDGETS_SEED = [
+  { id: 'net_worth', label: 'Net Worth', enabled: true, order: 0 },
+  { id: 'accounts', label: 'Accounts', enabled: true, order: 1 },
+  { id: 'spending_by_category', label: 'Spending by Category', enabled: true, order: 2 },
+  { id: 'recent_transactions', label: 'Recent Transactions', enabled: true, order: 3 },
+  { id: 'cash_flow', label: 'Cash Flow', enabled: true, order: 4 },
+  { id: 'holdings', label: 'Holdings', enabled: false, order: 5 },
+  { id: 'liabilities', label: 'Liabilities', enabled: true, order: 6 },
+  { id: 'recurring', label: 'Recurring', enabled: false, order: 7 },
+];
+
+const HOLDINGS = [
+  { id: 'h1', ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', quantity: '120.5', price: '271.30', value: '32691.65', costBasis: '26400.00' },
+  { id: 'h2', ticker: 'VXUS', name: 'Vanguard Total Intl Stock ETF', quantity: '210.0', price: '58.40', value: '12264.00', costBasis: '13100.00' },
+  { id: 'h3', ticker: 'BND', name: 'Vanguard Total Bond Market ETF', quantity: '95.0', price: '72.10', value: '6849.50', costBasis: '7020.00' },
+  { id: 'h4', ticker: null, name: 'Cash & Equivalents', quantity: null, price: null, value: '2425.85', costBasis: '2425.85' },
+];
+
+const INVESTMENT_ACTIVITY = [
+  { id: 'it1', date: '2026-07-01', name: 'Buy VTI', type: 'buy', quantity: '2.5', amount: '678.25' },
+  { id: 'it2', date: '2026-06-15', name: 'Dividend Reinvestment — VTI', type: 'buy', quantity: '0.8', amount: '217.04' },
+  { id: 'it3', date: '2026-06-01', name: 'Buy VXUS', type: 'buy', quantity: '5.0', amount: '292.00' },
+  { id: 'it4', date: '2026-05-20', name: 'Plan Contribution', type: 'cash', quantity: null, amount: '-1200.00' },
+  { id: 'it5', date: '2026-05-01', name: 'Advisory Fee', type: 'fee', quantity: null, amount: '12.50' },
+  { id: 'it6', date: '2026-04-15', name: 'Sell BND', type: 'sell', quantity: '10.0', amount: '-721.00' },
+];
+
+function money(str, opts) {
+  const n = Number(str);
+  return new Intl.NumberFormat('en-US', Object.assign({ style: 'currency', currency: 'USD', maximumFractionDigits: 2 }, opts || {})).format(n);
+}
+function dateLabel(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+}
+function initials(name) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+class Component extends DCLogic {
+  state = {
+    page: 'dashboard',
+    accounts: ACCOUNTS_SEED.map(a => Object.assign({}, a)),
+    items: ITEMS_SEED.map(i => Object.assign({}, i)),
+    toastText: '',
+    toastVisible: false,
+    searchValue: '',
+    accountFilter: 'all',
+    categoryFilter: 'all',
+    pendingFilter: 'all',
+    rangeFilter: 'all',
+    pageIndex: 0,
+    investmentTab: 'holdings',
+    settingsTab: 'dashboard',
+    dashboardWidgets: DASHBOARD_WIDGETS_SEED.map(w => Object.assign({}, w)),
+    defaultRangeDays: 30,
+    currency: 'USD',
+    confirmDisconnectId: null,
+    authMode: 'signin',
+  };
+
+  setInvestmentTab = (tab) => () => this.setState({ investmentTab: tab });
+  setSettingsTab = (tab) => () => this.setState({ settingsTab: tab });
+
+  toggleWidget = (id) => () => {
+    this.setState(s => ({ dashboardWidgets: s.dashboardWidgets.map(w => w.id === id ? Object.assign({}, w, { enabled: !w.enabled }) : w) }));
+  };
+
+  moveWidget = (id, dir) => () => {
+    this.setState(s => {
+      const list = s.dashboardWidgets.slice().sort((a, b) => a.order - b.order);
+      const idx = list.findIndex(w => w.id === id);
+      const swapWith = idx + dir;
+      if (swapWith < 0 || swapWith >= list.length) return null;
+      const tmpOrder = list[idx].order;
+      list[idx].order = list[swapWith].order;
+      list[swapWith].order = tmpOrder;
+      return { dashboardWidgets: list };
+    });
+  };
+
+  setRangeDays = (e) => this.setState({ defaultRangeDays: Number(e.target.value) });
+  setCurrency = (e) => this.setState({ currency: e.target.value });
+
+  askDisconnect = (itemId) => () => this.setState({ confirmDisconnectId: itemId });
+  cancelDisconnect = () => this.setState({ confirmDisconnectId: null });
+  confirmDisconnect = (itemId, institutionName) => () => {
+    this.setState(s => ({
+      items: s.items.filter(i => i.id !== itemId),
+      accounts: s.accounts.filter(a => a.itemId !== itemId),
+      confirmDisconnectId: null,
+    }));
+    this.showToast(`${institutionName} disconnected.`);
+  };
+  refreshItem = (institutionName) => () => this.showToast(`Refreshing ${institutionName}…`);
+  signOut = () => { this.showToast('Signed out.'); this.setState({ page: 'signin', authMode: 'signin' }); };
+  toggleAuthMode = () => this.setState(s => ({ authMode: s.authMode === 'signin' ? 'signup' : 'signin' }));
+  submitAuth = () => {
+    if (this.state.authMode === 'signup') {
+      this.setState({ page: 'onboarding' });
+    } else {
+      this.setState({ page: 'dashboard' });
+    }
+  };
+  connectFirstAccount = () => { this.showToast('Account connected — syncing your data.'); this.setState({ page: 'dashboard' }); };
+
+  showToast = (text) => {
+    this.setState({ toastText: text, toastVisible: true });
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => this.setState({ toastVisible: false }), 2600);
+  };
+
+  setPage = (page) => () => this.setState({ page });
+
+  toggleHidden = (id) => () => {
+    this.setState(s => ({ accounts: s.accounts.map(a => a.id === id ? Object.assign({}, a, { isHidden: !a.isHidden }) : a) }));
+  };
+
+  toggleDashHidden = (id) => () => {
+    this.setState(s => ({ accounts: s.accounts.map(a => a.id === id ? Object.assign({}, a, { dashHidden: !a.dashHidden }) : a) }));
+  };
+
+  reauth = (itemId) => () => {
+    this.setState(s => ({ items: s.items.map(i => i.id === itemId ? Object.assign({}, i, { status: 'good' }) : i) }));
+    this.showToast('Reconnected — account status is now Connected.');
+  };
+
+  connectAccount = () => this.showToast('Plaid Link would open here to connect a new institution.');
+
+  onSearchChange = (e) => this.setState({ searchValue: e.target.value, pageIndex: 0 });
+  onAccountFilterChange = (e) => this.setState({ accountFilter: e.target.value, pageIndex: 0 });
+  onCategoryFilterChange = (e) => this.setState({ categoryFilter: e.target.value, pageIndex: 0 });
+  onPendingFilterChange = (e) => this.setState({ pendingFilter: e.target.value, pageIndex: 0 });
+  onRangeFilterChange = (e) => this.setState({ rangeFilter: e.target.value, pageIndex: 0 });
+
+  goPrevPage = () => this.setState(s => ({ pageIndex: Math.max(0, s.pageIndex - 1) }));
+  goNextPage = () => {
+    const totalPages = this._lastTotalPages || 1;
+    this.setState(s => ({ pageIndex: Math.min(totalPages - 1, s.pageIndex + 1) }));
+  };
+
+  renderVals() {
+    const s = this.state;
+    const accountsById = {};
+    s.accounts.forEach(a => accountsById[a.id] = a);
+    const itemsById = {};
+    s.items.forEach(i => itemsById[i.id] = i);
+
+    const visibleForTotals = s.accounts.filter(a => !a.isHidden);
+    const assets = visibleForTotals.filter(a => a.type === 'depository' || a.type === 'investment')
+      .reduce((sum, a) => sum + Number(a.currentBalance), 0);
+    const liabilities = visibleForTotals.filter(a => a.type === 'credit' || a.type === 'loan')
+      .reduce((sum, a) => sum + Number(a.currentBalance), 0);
+    const netWorth = assets - liabilities;
+
+    const netWorthSeries = [assets - liabilities - 3400, assets - liabilities - 2100, assets - liabilities - 2600, assets - liabilities - 1200, assets - liabilities - 500, assets - liabilities];
+    const minV = Math.min(...netWorthSeries), maxV = Math.max(...netWorthSeries);
+    const sparklinePoints = netWorthSeries.map((v, i) => {
+      const x = (i / (netWorthSeries.length - 1)) * 196 + 2;
+      const y = 58 - ((v - minV) / (maxV - minV || 1)) * 50;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    // nav
+    const navItems = NAV_DEF.map(n => ({
+      key: n.key,
+      label: n.label,
+      showSoon: !n.enabled,
+      onClick: n.enabled ? this.setPage(n.key) : undefined,
+      hoverStyle: n.enabled ? { background: 'rgba(255,255,255,0.05)' } : {},
+    })).map(n => Object.assign({}, n, {
+      hoverStyle: n.key === s.page ? {} : n.hoverStyle,
+    }));
+    // apply active styling by mutating base style via separate structure — simpler: recompute with active bg inline
+    const navItemsFinal = NAV_DEF.map(n => {
+      const active = n.key === s.page;
+      return {
+        key: n.key,
+        label: n.label,
+        showSoon: !n.enabled,
+        onClick: n.enabled ? this.setPage(n.key) : undefined,
+        hoverStyle: n.enabled && !active ? { background: 'rgba(255,255,255,0.05)' } : {},
+      };
+    });
+
+    // banner
+    const badItems = s.items.filter(i => i.status !== 'good');
+    const hasBanner = badItems.length > 0;
+    const bannerText = hasBanner ? `${badItems[0].institutionName} needs to be reconnected — its data may be out of date.` : '';
+
+    // dashboard accounts (respect dashHidden, not isHidden)
+    const dashboardAccounts = s.accounts.filter(a => !a.dashHidden).slice(0, 5).map(a => ({
+      name: a.name,
+      mask: a.mask,
+      initials: initials(a.name),
+      badgeBg: a.type === 'credit' || a.type === 'loan' ? '#F87171' : (a.type === 'investment' ? '#3B82F6' : '#34D399'),
+      balanceFormatted: money(a.currentBalance),
+    }));
+
+    const spendTotal = SPENDING.reduce((sum, c) => sum + Number(c.amount), 0);
+    const spendingCategories = SPENDING.map(c => ({
+      category: c.category,
+      amountFormatted: money(c.amount),
+      pct: Math.round((Number(c.amount) / spendTotal) * 100),
+    }));
+
+    const sortedTx = TRANSACTIONS.slice().sort((a, b) => b.date.localeCompare(a.date));
+    const mkTxRow = (t) => {
+      const n = Number(t.amount);
+      const isOut = n > 0;
+      return {
+        name: t.name,
+        dateLabel: dateLabel(t.date),
+        pending: t.pending,
+        amountText: (isOut ? '−' : '+') + money(Math.abs(n).toFixed(2)).replace('$', '$'),
+        amountColor: isOut ? '#F87171' : '#34D399',
+        accountName: accountsById[t.accountId] ? accountsById[t.accountId].name : '—',
+        category: t.category,
+        date: t.date,
+      };
+    };
+    const recentTransactions = sortedTx.slice(0, 5).map(mkTxRow);
+
+    const cfMax = Math.max(...CASH_FLOW.map(m => Math.max(Number(m.income), Number(m.outflow))));
+    const cashFlowMonths = CASH_FLOW.map(m => ({
+      label: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(m.month + '-01T00:00:00')),
+      incomeHeightPct: Math.round((Number(m.income) / cfMax) * 100),
+      outflowHeightPct: Math.round((Number(m.outflow) / cfMax) * 100),
+    }));
+
+    const totalDebt = LIABILITIES.reduce((sum, l) => sum + Number(l.currentBalance), 0);
+    const liabWidget = {
+      totalDebtFormatted: money(totalDebt.toFixed(2)),
+      minDueFormatted: money('450.00'),
+      items: LIABILITIES.map(l => ({
+        name: l.name,
+        mask: l.mask,
+        balanceFormatted: money(l.currentBalance),
+        isOverdue: l.isOverdue,
+        dueLabel: l.isOverdue ? `Overdue — was due ${dateLabel(l.nextPaymentDueDate)}` : `Due ${dateLabel(l.nextPaymentDueDate)}`,
+        dueColor: l.isOverdue ? '#F59E0B' : '#565F70',
+        rowBg: l.isOverdue ? 'rgba(245,158,11,0.07)' : 'transparent',
+      })),
+    };
+
+    // Accounts page groups
+    const institutionGroups = s.items.map(item => {
+      const accts = s.accounts.filter(a => a.itemId === item.id);
+      return {
+        institutionName: item.institutionName,
+        needsReauth: item.status === 'login_required',
+        onReauth: this.reauth(item.id),
+        statusLabel: item.status === 'good' ? 'CONNECTED' : (item.status === 'login_required' ? 'NEEDS ATTENTION' : 'ERROR'),
+        statusBg: item.status === 'good' ? 'rgba(52,211,153,0.12)' : 'rgba(245,158,11,0.14)',
+        statusColor: item.status === 'good' ? '#34D399' : '#F59E0B',
+        accounts: accts.map(a => ({
+          name: a.name,
+          mask: a.mask,
+          subtype: a.subtype,
+          isHidden: a.isHidden,
+          rowOpacity: a.isHidden ? 0.55 : 1,
+          balanceFormatted: money(a.currentBalance),
+          onToggleHidden: this.toggleHidden(a.id),
+          onToggleDashboardHide: this.toggleDashHidden(a.id),
+          dashHideLabel: a.dashHidden ? 'Show on dashboard' : 'Hide on dashboard',
+          dashHideColor: a.dashHidden ? '#3B82F6' : '#565F70',
+          switchBg: a.isHidden ? 'rgba(248,113,113,0.35)' : 'rgba(255,255,255,0.1)',
+          switchPos: a.isHidden ? 17 : 2,
+        })),
+      };
+    });
+
+    // Transactions filtering
+    const now = new Date('2026-07-07T00:00:00');
+    let rangeStart = null;
+    if (s.rangeFilter === 'week') { rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 7); }
+    if (s.rangeFilter === 'month') { rangeStart = new Date(now); rangeStart.setDate(now.getDate() - 30); }
+
+    let filtered = TRANSACTIONS.slice();
+    if (s.searchValue.trim()) {
+      const q = s.searchValue.trim().toLowerCase();
+      filtered = filtered.filter(t => t.name.toLowerCase().includes(q));
+    }
+    if (s.accountFilter !== 'all') filtered = filtered.filter(t => t.accountId === s.accountFilter);
+    if (s.categoryFilter !== 'all') filtered = filtered.filter(t => t.category === s.categoryFilter);
+    if (s.pendingFilter === 'pending') filtered = filtered.filter(t => t.pending);
+    if (s.pendingFilter === 'posted') filtered = filtered.filter(t => !t.pending);
+    if (rangeStart) filtered = filtered.filter(t => new Date(t.date + 'T00:00:00') >= rangeStart);
+    filtered.sort((a, b) => b.date.localeCompare(a.date));
+
+    const pageSize = 8;
+    const totalFilteredCount = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
+    const pageIndex = Math.min(s.pageIndex, totalPages - 1);
+    this._lastTotalPages = totalPages;
+    const pageStart = pageIndex * pageSize;
+    const pageRows = filtered.slice(pageStart, pageStart + pageSize).map(mkTxRow);
+    const hasRows = pageRows.length > 0;
+
+    const accountOptions = [{ value: 'all', label: 'All accounts' }].concat(
+      s.accounts.map(a => ({ value: a.id, label: a.name }))
+    );
+    const categorySet = Array.from(new Set(TRANSACTIONS.map(t => t.category)));
+    const categoryOptions = [{ value: 'all', label: 'All categories' }].concat(
+      categorySet.map(c => ({ value: c, label: c }))
+    );
+
+    return {
+      page: s.page,
+      isDashboard: s.page === 'dashboard',
+      isAccounts: s.page === 'accounts',
+      isTransactions: s.page === 'transactions',
+      isInvestments: s.page === 'investments',
+      isSettings: s.page === 'settings',
+      isSignin: s.page === 'signin',
+      isOnboarding: s.page === 'onboarding',
+      isAppShell: s.page !== 'signin' && s.page !== 'onboarding',
+      isSignupMode: s.authMode === 'signup',
+      authTitle: s.authMode === 'signup' ? 'Create your account' : 'Welcome back',
+      authSubtitle: s.authMode === 'signup' ? 'Set up your dashboard in a couple minutes.' : 'Sign in to see where you stand.',
+      authButtonLabel: s.authMode === 'signup' ? 'Create account' : 'Sign in',
+      authSwitchPrompt: s.authMode === 'signup' ? 'Already have an account?' : "Don't have an account?",
+      authSwitchAction: s.authMode === 'signup' ? 'Sign in' : 'Sign up',
+      onToggleAuthMode: this.toggleAuthMode,
+      onSubmitAuth: this.submitAuth,
+      onConnectFirstAccount: this.connectFirstAccount,
+      isSettingsDashboard: s.settingsTab === 'dashboard',
+      isSettingsConnected: s.settingsTab === 'connected',
+      isSettingsProfile: s.settingsTab === 'profile',
+      setSettingsDashboardTab: this.setSettingsTab('dashboard'),
+      setSettingsConnectedTab: this.setSettingsTab('connected'),
+      setSettingsProfileTab: this.setSettingsTab('profile'),
+      settingsDashboardTabStyle: s.settingsTab === 'dashboard' ? { background: 'rgba(59,130,246,0.12)', color: '#3B82F6' } : { background: 'transparent', color: '#9AA4B2' },
+      settingsConnectedTabStyle: s.settingsTab === 'connected' ? { background: 'rgba(59,130,246,0.12)', color: '#3B82F6' } : { background: 'transparent', color: '#9AA4B2' },
+      settingsProfileTabStyle: s.settingsTab === 'profile' ? { background: 'rgba(59,130,246,0.12)', color: '#3B82F6' } : { background: 'transparent', color: '#9AA4B2' },
+
+      widgetRows: (() => {
+        const sorted = s.dashboardWidgets.slice().sort((a, b) => a.order - b.order);
+        return sorted.map((w, idx) => ({
+          id: w.id,
+          label: w.label,
+          enabled: w.enabled,
+          switchBg: w.enabled ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)',
+          switchPos: w.enabled ? 17 : 2,
+          onToggle: this.toggleWidget(w.id),
+          onMoveUp: idx > 0 ? this.moveWidget(w.id, -1) : undefined,
+          onMoveDown: idx < sorted.length - 1 ? this.moveWidget(w.id, 1) : undefined,
+          upColor: idx > 0 ? '#9AA4B2' : '#333A48',
+          downColor: idx < sorted.length - 1 ? '#9AA4B2' : '#333A48',
+        }));
+      })(),
+      rangeDaysValue: String(s.defaultRangeDays),
+      setRangeDays: this.setRangeDays,
+      currencyValue: s.currency,
+      setCurrency: this.setCurrency,
+
+      connectedItemsRows: s.items.map(item => {
+        const accts = s.accounts.filter(a => a.itemId === item.id);
+        return {
+          id: item.id,
+          institutionName: item.institutionName,
+          statusLabel: item.status === 'good' ? 'CONNECTED' : (item.status === 'login_required' ? 'NEEDS ATTENTION' : 'ERROR'),
+          statusBg: item.status === 'good' ? 'rgba(52,211,153,0.12)' : 'rgba(245,158,11,0.14)',
+          statusColor: item.status === 'good' ? '#34D399' : '#F59E0B',
+          accountCount: accts.length,
+          accountCountLabel: accts.length === 1 ? '1 account' : `${accts.length} accounts`,
+          needsReauth: item.status === 'login_required',
+          onReauth: this.reauth(item.id),
+          onRefresh: this.refreshItem(item.institutionName),
+          onAskDisconnect: this.askDisconnect(item.id),
+          confirming: s.confirmDisconnectId === item.id,
+          onCancelDisconnect: this.cancelDisconnect,
+          onConfirmDisconnect: this.confirmDisconnect(item.id, item.institutionName),
+        };
+      }),
+      isHoldingsTab: s.investmentTab === 'holdings',
+      isActivityTab: s.investmentTab === 'activity',
+      setHoldingsTab: this.setInvestmentTab('holdings'),
+      setActivityTab: this.setInvestmentTab('activity'),
+      holdingsTabStyle: s.investmentTab === 'holdings' ? { color: '#F2F4F8', borderBottom: '2px solid #3B82F6' } : { color: '#7A8394', borderBottom: '2px solid transparent' },
+      activityTabStyle: s.investmentTab === 'activity' ? { color: '#F2F4F8', borderBottom: '2px solid #3B82F6' } : { color: '#7A8394', borderBottom: '2px solid transparent' },
+      holdingsRows: HOLDINGS.map(h => {
+        const gainLoss = Number(h.value) - Number(h.costBasis);
+        return {
+          ticker: h.ticker || '—',
+          name: h.name,
+          quantity: h.quantity || '—',
+          priceFormatted: h.price ? money(h.price) : '—',
+          valueFormatted: money(h.value),
+          costBasisFormatted: money(h.costBasis),
+          gainLossFormatted: (gainLoss >= 0 ? '+' : '−') + money(Math.abs(gainLoss).toFixed(2)),
+          gainLossColor: gainLoss >= 0 ? '#34D399' : '#F87171',
+        };
+      }),
+      holdingsTotals: (() => {
+        const value = HOLDINGS.reduce((sum, h) => sum + Number(h.value), 0);
+        const costBasis = HOLDINGS.reduce((sum, h) => sum + Number(h.costBasis), 0);
+        const gainLoss = value - costBasis;
+        return {
+          valueFormatted: money(value.toFixed(2)),
+          costBasisFormatted: money(costBasis.toFixed(2)),
+          gainLossFormatted: (gainLoss >= 0 ? '+' : '−') + money(Math.abs(gainLoss).toFixed(2)),
+          gainLossColor: gainLoss >= 0 ? '#34D399' : '#F87171',
+        };
+      })(),
+      activityRows: INVESTMENT_ACTIVITY.slice().sort((a, b) => b.date.localeCompare(a.date)).map(t => {
+        const n = Number(t.amount);
+        const isOut = n > 0;
+        return {
+          dateLabel: dateLabel(t.date),
+          name: t.name,
+          typeLabel: t.type.charAt(0).toUpperCase() + t.type.slice(1),
+          quantity: t.quantity || '—',
+          amountText: (isOut ? '−' : '+') + money(Math.abs(n).toFixed(2)),
+          amountColor: isOut ? '#F87171' : '#34D399',
+        };
+      }),
+      navItems: navItemsFinal,
+      goAccounts: this.setPage('accounts'),
+      goTransactions: this.setPage('transactions'),
+      linkHover: { color: '#5B93F5' },
+      blueHover: { background: '#5B93F5' },
+      amberHover: { background: '#FBBF24' },
+      amberLinkHover: { color: '#FBBF24' },
+
+      hasBanner,
+      bannerText,
+      reauthFromBanner: hasBanner ? this.reauth(badItems[0].id) : undefined,
+
+      netWorthFormatted: money(netWorth.toFixed(2)),
+      assetsFormatted: money(assets.toFixed(2)),
+      liabilitiesFormatted: money(liabilities.toFixed(2)),
+      sparklinePoints,
+
+      dashboardAccounts,
+      spendingCategories,
+      recentTransactions,
+      cashFlowMonths,
+      liabWidget,
+
+      institutionGroups,
+      connectAccount: this.connectAccount,
+
+      searchValue: s.searchValue,
+      onSearchChange: this.onSearchChange,
+      accountFilter: s.accountFilter,
+      onAccountFilterChange: this.onAccountFilterChange,
+      accountOptions,
+      categoryFilter: s.categoryFilter,
+      onCategoryFilterChange: this.onCategoryFilterChange,
+      categoryOptions,
+      pendingFilter: s.pendingFilter,
+      onPendingFilterChange: this.onPendingFilterChange,
+      rangeFilter: s.rangeFilter,
+      onRangeFilterChange: this.onRangeFilterChange,
+
+      pageRows,
+      hasRows,
+      showEmptyState: !hasRows,
+      totalFilteredCount,
+      pageRangeLabel: totalFilteredCount === 0 ? '0' : `${pageStart + 1}–${Math.min(pageStart + pageSize, totalFilteredCount)}`,
+      goPrevPage: this.goPrevPage,
+      goNextPage: this.goNextPage,
+      prevColor: pageIndex === 0 ? '#3A4152' : '#F2F4F8',
+      nextColor: pageIndex >= totalPages - 1 ? '#3A4152' : '#F2F4F8',
+
+      signOut: this.signOut,
+      toastVisible: s.toastVisible,
+      toastText: s.toastText,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
