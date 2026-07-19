@@ -34,7 +34,7 @@ scripted Plaid Sandbox runs, not a browser.
 
 ## 2. Where we are right now (phase status)
 
-The build is organized into phases. 1–12 are complete.
+The build is organized into phases. 1–12 (backend) plus the `apps/web` frontend build (§26) are complete.
 
 | Phase | Scope | Status |
 |------:|-------|--------|
@@ -50,6 +50,7 @@ The build is organized into phases. 1–12 are complete.
 | **10** | **Budgets**: monthly spend limit per Plaid category vs. actual spend | ✅ **done, verified live** |
 | **11** | **Transaction notes/tags/category overrides/splits** | ✅ **done, verified live** |
 | **12** | **Goals**: savings-target / debt-payoff tracking, optionally linked to a live account | ✅ **done, verified live** |
+| — | **`apps/web` frontend**: the whole product surface as a Vite + React SPA (§26) | ✅ **done, verified live in browser** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -1302,3 +1303,125 @@ Phases 9–12 close out the "one-stop-shop" plan: manual assets/liabilities, bud
 notes/tags/splits, and goals. Alerts (rule-based notifications) remain the one explicitly
 out-of-scope item from that plan — it needs new notification/email infrastructure this repo
 doesn't have yet.
+
+---
+
+## 26. `apps/web` — the frontend
+
+The backend (Phases 1–12) was built and verified entirely against scripted Sandbox E2Es with no
+UI. `apps/web` landed afterward in one large commit (`53a0d7f`, 2026-07-09) — a Vite + React SPA
+covering the **entire** product surface in one shot, per [DESIGN_HANDOFF.md](./DESIGN_HANDOFF.md).
+This section documents what it actually is and records the first full click-through against a
+live backend (2026-07-18), which happened after that commit and caught one real bug.
+
+### 26.1 Stack + layout
+
+`@fin/web`, depends on `@fin/shared` via `workspace:*` for the exact DTO types the API returns —
+same pattern as `@fin/api`. Vite + **React 19** + TypeScript, **React Router v7**, **TanStack
+Query** (server state/caching), **Radix UI** primitives + **Tailwind CSS v4**, **react-plaid-link**
+for the Link modal, **@supabase/supabase-js** for auth, **Zod** for form validation, **Recharts**
+for the net-worth/cash-flow/spending charts.
+
+```
+apps/web/src/
+├─ App.tsx                  # BrowserRouter + route table
+├─ main.tsx                 # QueryClientProvider + AuthProvider + ToastProvider, StrictMode
+├─ routes/                  # one file per page (see §26.2)
+├─ components/
+│  ├─ dashboard/            # one widget component per WidgetId (§26.3)
+│  ├─ layout/                # sidebar.tsx, status-banner.tsx
+│  ├─ transactions/           # transaction-row-detail.tsx (expand/edit + split dialog)
+│  └─ ui/                     # dialog.tsx (Radix wrapper), form-field.tsx — the shared Add/Edit form kit
+├─ hooks/                    # use-plaid-connect.ts, use-reauth.ts
+├─ providers/                # auth-provider.tsx (Supabase session), toast-provider.tsx
+└─ lib/
+   ├─ api.ts, api-error.ts    # fetch wrapper — attaches the Supabase JWT, throws ApiRequestError
+   ├─ queries.ts               # every TanStack Query hook (useAccounts, useGoals, …)
+   ├─ format.ts                 # formatMoney/formatDate — the only formatting path (Intl.*)
+   ├─ supabase.ts, utils.ts
+   └─ schemas/                  # zod schemas for the Add/Edit dialogs (budget, goal, manual-asset, split)
+```
+
+### 26.2 Routes
+
+| Path | Page | Notes |
+|---|---|---|
+| `/sign-in` | Supabase email/password sign-in + sign-up | Redirects to `/` once a session exists |
+| `/` | Dashboard | Per-user widget config (§26.3); onboarding screen if zero Plaid items |
+| `/accounts` | All connected accounts, grouped by institution | Hide/show toggle (no rename UI — §26.5) |
+| `/transactions` | Filter/search/paginate; inline expand for notes/tags/category override + split dialog | |
+| `/net-worth`, `/spending`, `/cash-flow` | Aggregation pages | Charts via Recharts |
+| `/investments` | Holdings + activity tabs | |
+| `/liabilities`, `/recurring` | Read-only detail pages | |
+| `/manual-assets` | Assets & Liabilities CRUD | Reachable with zero Plaid items |
+| `/budgets` | Set/edit monthly limits | Reachable with zero Plaid items only via nav, not gated |
+| `/goals` | Add/edit linked or unlinked goals | Reachable with zero Plaid items |
+| `/settings` | Dashboard tab (widgets/order/prefs), Connected Accounts tab (refresh/disconnect), Profile tab (sign out) | Reachable with zero Plaid items |
+
+`app-shell.tsx`'s `NO_ITEMS_REQUIRED_PATHS` (`/manual-assets`, `/goals`, `/settings`) is the
+onboarding-gate exemption list — every other route redirects to the "Connect your first account"
+screen until at least one Plaid item exists.
+
+### 26.3 Dashboard widgets
+
+One component per `WidgetId` (`WIDGET_COMPONENTS` in `routes/dashboard.tsx`), rendered in the
+user's configured order: `net_worth`, `accounts`, `spending_by_category`, `recent_transactions`,
+`cash_flow`, `holdings`, `liabilities`, `recurring`, `manual_assets`, `budgets`, `goals`. All but
+the first four default to disabled (opt-in) per `DEFAULT_DASHBOARD_CONFIG` in `@fin/shared`.
+
+### 26.4 Live browser verification (2026-07-18)
+
+Ran the real app end-to-end against the live Supabase + Plaid Sandbox backend (both dev servers,
+`pnpm api:dev` + `pnpm --filter @fin/web dev`) using a confirmed test user minted via the Supabase
+Admin API, signed in through the **actual sign-in form** — the same Gotcha-9 pattern, but logging
+in through the UI instead of injecting a session, so the sign-in form itself got exercised.
+
+**What was covered:** sign-in, the onboarding gate and its exemption list, manual assets + an
+unlinked goal with zero Plaid items connected (proving `ensureProfile()` still runs), all 11
+dashboard widgets after enabling them in Settings, accounts (hide/show + net-worth delta), the
+transaction detail panel (note/tags/category override) and the split dialog, investments
+(holdings + activity), net worth, spending, cash flow, liabilities, recurring, a budget
+(set/progress), a goal linked to a real account (live balance tracking, correct `progressPercent`),
+and Settings (widget reorder, preferences, Connected Accounts refresh, Profile sign-out) — with a
+reload after each persistence-sensitive change to confirm it actually round-tripped through the
+API, not just the optimistic cache. Every real number cross-checked exactly against the figures
+recorded in the Phase 7/8 E2E proofs (§20.5, §21.5) — same Sandbox item, same data.
+
+One thing that could **not** be automated: the Plaid Link modal itself (an iframe hosted by
+Plaid's CDN) didn't respond to the browser-automation tool's synthetic clicks — not an app bug,
+a limitation of driving a cross-origin iframe that way. Worked around it by minting a Sandbox
+`public_token` directly (same institution/products `sandboxCreatePublicToken()` uses) and posting
+it through the real `POST /api/plaid/exchange` endpoint with the signed-in user's actual JWT — so
+the exchange, sync-kickoff, and every downstream page still got exercised against real data; only
+the Link iframe's own institution-search UI (Plaid's code, not this repo's) went unclicked.
+
+**Bug found and fixed:** `Settings → Dashboard` tab's `toggleWidget`/`moveWidget`
+(`routes/settings.tsx`) closed over the `config` value from render time. Toggling several widgets
+in quick succession — clicking switch 2 before switch 1's mutation had round-tripped and
+re-rendered — meant switch 2's handler still mutated the pre-switch-1 config, silently reverting
+switch 1. Reproduced by enabling all 6 disabled widgets in one fast sequence: 5 landed, the last
+(Goals) silently stayed off with no error anywhere. Fixed by reading the latest value from the
+TanStack Query cache (`queryClient.getQueryData(["dashboard-config"])`) at click time instead of
+trusting the closure — verified fixed by re-running the same fast-toggle sequence and confirming
+all 6 persisted across a reload.
+
+**Gap noted, not fixed:** the backend's `PATCH /accounts/:id` supports renaming an account
+(§17.2), but `routes/accounts.tsx` only wires up the hide/show toggle — there's no rename UI.
+Not a regression (nothing broke), just a feature the frontend build never surfaced; flagged here
+rather than built silently since it's new scope, not a bug fix.
+
+No other console errors or wrong numbers surfaced. (`FILE_ERROR_NO_SPACE` / "Plaid link-initialize
+script embedded more than once" console lines seen during testing are a local Chrome-profile disk
+issue and a React `StrictMode` double-effect artifact respectively — neither is an app bug, see
+`main.tsx`'s `<StrictMode>` wrapper for the latter.)
+
+Test data (the minted user, its Plaid item, manual asset, goals, and budget) was deleted afterward
+via the Supabase Admin API + `prisma.profile.delete` (cascades to everything — Gotcha 9).
+`pnpm --filter @fin/api test` stayed green throughout (23/23), confirming the fix didn't touch
+anything backend-side.
+
+### 26.5 Known gaps (not bugs)
+
+- **No account rename UI** (§26.4) — backend supports it, frontend doesn't expose it.
+- **No committed frontend test suite.** Verification so far has been interactive (Playwright in
+  Phases 9–12, browser automation here) — there's no regression net for `apps/web` today.

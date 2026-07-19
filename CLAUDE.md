@@ -32,15 +32,7 @@ pnpm workspace monorepo. `apps/api` (`@fin/api`) and `apps/web` (`@fin/web`) bot
   Modules: `plaid items sync accounts transactions aggregations dashboard investments
   liabilities recurring manual-assets budgets goals` plus infra (`config crypto auth prisma
   health observability`).
-- `apps/api/prisma/` — `schema.prisma` + `migrations/`.
-- `apps/api/scripts/*-e2e.ts` — live Sandbox integration tests (one per phase).
-- `packages/shared/src/index.ts` — all DTOs, enums, `DashboardConfig`, `WIDGET_IDS`.
-- `apps/web/src/{routes,components,lib,providers,hooks}` — Vite + React 19 + TanStack Query.
-  New page → register the route in `App.tsx` + a nav entry in `components/layout/sidebar.tsx`.
-  New dashboard widget → wire into `WIDGET_COMPONENTS` (`routes/dashboard.tsx`) and
-  `WIDGET_LABELS` (`routes/settings.tsx`). "Add/Edit X" forms use the Radix Dialog + zod
-  pattern established in Phase 9 (`components/ui/dialog.tsx`, `components/ui/form-field.tsx`,
-  `lib/schemas/*.ts`) — reuse it, don't invent a new form pattern.
+- See `apps/web/CLAUDE.md` for frontend-specific conventions (new pages, dashboard widgets, forms).
 
 ## Commands (run from repo root)
 

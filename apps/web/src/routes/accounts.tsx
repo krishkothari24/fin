@@ -7,6 +7,10 @@ import { api } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import { usePlaidConnect } from "@/hooks/use-plaid-connect";
 import { useReauth } from "@/hooks/use-reauth";
+import { useToast } from "@/providers/toast-provider";
+import { Modal, ModalActions, ModalCancelButton } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
+import { accountRenameFormSchema } from "@/lib/schemas/account";
 import { cn } from "@/lib/utils";
 
 const AGGREGATE_QUERY_KEYS = ["net-worth", "spending", "cash-flow", "liabilities", "holdings"];
@@ -19,6 +23,7 @@ export function AccountsRoute() {
   const { connect, starting, connecting } = usePlaidConnect();
   const { reauth, preparingItemId, activeItemId } = useReauth();
   const [collapsedItemIds, setCollapsedItemIds] = useState<Set<string>>(new Set());
+  const [renaming, setRenaming] = useState<AccountDto | null>(null);
 
   function toggleCollapsed(itemId: string) {
     setCollapsedItemIds((prev) => {
@@ -196,6 +201,14 @@ export function AccountsRoute() {
                               <div className="flex items-center gap-3.5">
                                 <button
                                   type="button"
+                                  title="Rename this account"
+                                  onClick={() => setRenaming(acc)}
+                                  className="whitespace-nowrap text-[11px] font-medium text-text-faint hover:text-text-primary"
+                                >
+                                  Rename
+                                </button>
+                                <button
+                                  type="button"
                                   title="Toggle dashboard card visibility"
                                   onClick={() => toggleDashboardHide(acc.id)}
                                   className={cn(
@@ -232,6 +245,62 @@ export function AccountsRoute() {
           })}
         </div>
       )}
+
+      {renaming && <RenameAccountDialog key={renaming.id} account={renaming} onClose={() => setRenaming(null)} />}
     </div>
+  );
+}
+
+function RenameAccountDialog({ account, onClose }: { account: AccountDto; onClose: () => void }) {
+  const [name, setName] = useState(account.name);
+  const [error, setError] = useState<string | undefined>();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+
+  const renameMutation = useMutation({
+    mutationFn: (values: { name: string }) => api.patch<AccountDto>(`/accounts/${account.id}`, values),
+    onSuccess: () => {
+      showToast("Renamed.");
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      onClose();
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result = accountRenameFormSchema.safeParse({ name });
+    if (!result.success) {
+      setError(result.error.issues[0]?.message);
+      return;
+    }
+    setError(undefined);
+    renameMutation.mutate(result.data);
+  }
+
+  return (
+    <Modal open onOpenChange={(next) => !next && onClose()} title="Rename account">
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <FormField label="Name" error={error}>
+          <input
+            className="input"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={account.name}
+          />
+        </FormField>
+
+        <ModalActions>
+          <ModalCancelButton>Cancel</ModalCancelButton>
+          <button
+            type="submit"
+            disabled={renameMutation.isPending}
+            className="rounded-lg bg-accent px-4 py-2.5 text-[13px] font-semibold text-bg hover:bg-accent-hover disabled:opacity-60"
+          >
+            {renameMutation.isPending ? "Saving…" : "Save"}
+          </button>
+        </ModalActions>
+      </form>
+    </Modal>
   );
 }

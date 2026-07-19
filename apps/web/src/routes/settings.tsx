@@ -99,6 +99,7 @@ function useConfigMutation() {
 function DashboardTab() {
   const { data: config } = useDashboardConfig();
   const mutation = useConfigMutation();
+  const queryClient = useQueryClient();
 
   if (!config) {
     return <div className="h-40 animate-pulse rounded-[14px] bg-surface" />;
@@ -106,25 +107,33 @@ function DashboardTab() {
 
   const sorted = config.widgets.slice().sort((a, b) => a.order - b.order);
 
+  // Read the latest optimistic value from the cache rather than the closed-over `config` —
+  // otherwise rapid consecutive toggles/reorders (each still holding the pre-click config)
+  // race and silently clobber each other's changes.
+  function latestConfig(): DashboardConfig {
+    return queryClient.getQueryData<DashboardConfig>(["dashboard-config"]) ?? config!;
+  }
+
   function moveWidget(id: WidgetId, direction: -1 | 1) {
-    if (!config) return;
-    const idx = sorted.findIndex((w) => w.id === id);
+    const current = latestConfig();
+    const sortedNow = current.widgets.slice().sort((a, b) => a.order - b.order);
+    const idx = sortedNow.findIndex((w) => w.id === id);
     const swapIdx = idx + direction;
-    if (swapIdx < 0 || swapIdx >= sorted.length) return;
-    const a = sorted[idx];
-    const b = sorted[swapIdx];
-    const widgets = config.widgets.map((w) => {
+    if (swapIdx < 0 || swapIdx >= sortedNow.length) return;
+    const a = sortedNow[idx];
+    const b = sortedNow[swapIdx];
+    const widgets = current.widgets.map((w) => {
       if (w.id === a.id) return { ...w, order: b.order };
       if (w.id === b.id) return { ...w, order: a.order };
       return w;
     });
-    mutation.mutate({ ...config, widgets });
+    mutation.mutate({ ...current, widgets });
   }
 
   function toggleWidget(id: WidgetId) {
-    if (!config) return;
-    const widgets = config.widgets.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w));
-    mutation.mutate({ ...config, widgets });
+    const current = latestConfig();
+    const widgets = current.widgets.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w));
+    mutation.mutate({ ...current, widgets });
   }
 
   return (
