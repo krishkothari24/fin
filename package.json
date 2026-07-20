@@ -12,6 +12,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "api:dev": "pnpm --filter @fin/api start:dev",
-    "api:build": "pnpm --filter @fin/shared build && pnpm --filter @fin/api build"
+    "api:build": "pnpm --filter @fin/shared build && pnpm --filter @fin/api build",
+    "web:build": "pnpm --filter @fin/shared build && pnpm --filter @fin/web build"
   }
 }
