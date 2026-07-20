@@ -1,0 +1,46 @@
+# Render Blueprint for apps/api. Import this repo at https://dashboard.render.com/blueprints
+# and Render will read this file automatically. `sync: false` vars must be filled in manually
+# in the Render dashboard after creation (never commit real secret values here).
+#
+# Free plan sleeps after ~15 min of no traffic (cold start on next request, pg-boss cron pauses
+# while asleep) — see docs/SECURITY.md and TODO.md's deploy roadmap for the tradeoffs.
+services:
+  - type: web
+    name: fin-api
+    runtime: node
+    plan: free
+    # Working directory is the repo root (pnpm workspace) — do not set rootDir, it breaks the
+    # workspace symlink to @fin/shared that `pnpm api:build` depends on.
+    buildCommand: pnpm install --frozen-lockfile && pnpm api:build
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: PLAID_ENV
+        value: sandbox
+      - key: PLAID_CLIENT_ID
+        sync: false
+      - key: PLAID_SECRET
+        sync: false
+      - key: PLAID_WEBHOOK_URL
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      # Leave SENTRY_DSN unset for now — fully opt-in, zero cost, zero code change to add later.
