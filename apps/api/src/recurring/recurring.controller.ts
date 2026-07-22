@@ -1,11 +1,10 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { ListRecurringQuery } from "./dto/list-recurring.query";
 import { RecurringService } from "./recurring.service";
 
 /** Read API for Plaid Recurring Transactions: detected subscriptions / bills / paychecks. */
-@UseGuards(SupabaseJwtGuard)
 @Controller("recurring")
 export class RecurringController {
   constructor(private readonly recurring: RecurringService) {}

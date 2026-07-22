@@ -12,9 +12,38 @@ import { configureLogging } from "./observability/structured-logger";
  * shutdown. Factored out of main.ts so the hardening E2E boots a byte-identical
  * app and can assert these behaviours over real HTTP.
  */
+/**
+ * Secrets `env.validation.ts` intentionally leaves optional (so local dev / CI
+ * health checks can boot without them) but that a real production deploy must
+ * never be missing — a misconfigured Render env should fail the deploy, not
+ * fail silently in front of a real user's first Plaid link.
+ */
+const REQUIRED_IN_PRODUCTION = [
+  "DATABASE_URL",
+  "DIRECT_URL",
+  "SUPABASE_URL",
+  "SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SECRET_KEY",
+  "PLAID_CLIENT_ID",
+  "PLAID_SECRET",
+  "ENCRYPTION_KEY",
+  "CORS_ORIGINS",
+] as const;
+
+function assertProductionSecrets(config: ConfigService, nodeEnv: string): void {
+  if (nodeEnv !== "production") return;
+  const missing = REQUIRED_IN_PRODUCTION.filter((key) => !config.get<string>(key));
+  if (missing.length > 0) {
+    throw new Error(
+      `Refusing to start in production with missing env vars: ${missing.join(", ")}`,
+    );
+  }
+}
+
 export function applyHardening(app: INestApplication): void {
   const config = app.get(ConfigService);
   const nodeEnv = config.get<string>("NODE_ENV", "development");
+  assertProductionSecrets(config, nodeEnv);
 
   // JSON logs on hosts that aggregate stdout (prod default); pretty lines locally.
   configureLogging(config.get<boolean>("LOG_JSON") ?? nodeEnv === "production");

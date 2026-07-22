@@ -24,6 +24,19 @@ interface SyncJob {
  * or an incoming webhook can enqueue a sync and return immediately, while a
  * worker in this process drains the queue.
  *
+ * The sync engines (SyncService, InvestmentsSyncService, LiabilitiesSyncService,
+ * RecurringSyncService, SnapshotService) all run on PrismaOwnerService, not the
+ * request-scoped PrismaService: each interleaves external Plaid API calls with
+ * DB writes, and Phase 13's per-request `withUserContext` holds a single open
+ * Postgres transaction for its whole scope — fine for a fast, DB-only HTTP
+ * request, but wrapping a multi-second (or overlapping, retried) Plaid sync in
+ * one long-lived transaction caused real transaction-timeout and deadlock
+ * errors under this app's own concurrent-sync idempotency test. Background
+ * jobs also aren't driven by arbitrary user-supplied query parameters the way
+ * HTTP controllers are (they process one server-resolved itemId at a time), so
+ * the IDOR-defense-in-depth value of forcing RLS onto them is much lower than
+ * on the HTTP path — not worth the reliability cost. See docs/SECURITY.md.
+ *
  * The queue is best-effort at boot: if it can't start (no DB, DB down), the API
  * still serves HTTP; enqueue calls just log and no-op until it's healthy.
  */

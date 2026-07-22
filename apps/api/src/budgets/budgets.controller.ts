@@ -1,12 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Put, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Put, Query } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { BudgetsService } from "./budgets.service";
 import { UpsertBudgetDto } from "./dto/upsert-budget.dto";
 import { ListBudgetsQuery } from "./dto/list-budgets.query";
 
 /** Monthly spend limit per Plaid category, merged with that month's actual spend. */
-@UseGuards(SupabaseJwtGuard)
 @Controller("budgets")
 export class BudgetsController {
   constructor(private readonly budgets: BudgetsService) {}

@@ -1,10 +1,9 @@
-import { Body, Controller, Get, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Put } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { DashboardService } from "./dashboard.service";
 import { UpdateDashboardConfigDto } from "./dto/update-dashboard-config.dto";
 
-@UseGuards(SupabaseJwtGuard)
 @Controller("dashboard")
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}

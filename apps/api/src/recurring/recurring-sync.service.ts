@@ -3,7 +3,7 @@ import { TransactionStream } from "plaid";
 import { RecurringDirection } from "@fin/shared";
 import { CryptoService } from "../crypto/crypto.service";
 import { PlaidService } from "../plaid/plaid.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { PrismaOwnerService } from "../prisma/prisma-owner.service";
 import { RecurringStreamRecord, mapTransactionStream } from "./recurring.mappers";
 
 export interface RecurringSyncResult {
@@ -35,7 +35,7 @@ export class RecurringSyncService {
   private readonly logger = new Logger(RecurringSyncService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaOwnerService,
     private readonly plaid: PlaidService,
     private readonly crypto: CryptoService,
   ) {}

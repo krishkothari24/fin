@@ -1,11 +1,13 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AppConfigModule } from "./config/config.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { CryptoModule } from "./crypto/crypto.module";
 import { AuthModule } from "./auth/auth.module";
+import { SupabaseJwtGuard } from "./auth/supabase-jwt.guard";
+import { UserContextInterceptor } from "./auth/user-context.interceptor";
 import { HealthModule } from "./health/health.module";
 import { ItemsModule } from "./items/items.module";
 import { SyncModule } from "./sync/sync.module";
@@ -56,9 +58,17 @@ import { ObservabilityModule } from "./observability/observability.module";
     GoalsModule,
   ],
   providers: [
-    // Global rate-limit guard. Runs ahead of route guards; @SkipThrottle exempts
+    // Global rate-limit guard. Runs ahead of the auth guard; @SkipThrottle exempts
     // the webhook + health check, @Throttle tightens the auth endpoints.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Global auth guard — default-deny. Every route needs a valid Supabase JWT
+    // unless explicitly marked @Public() (health check, Plaid webhook — the
+    // latter has its own signature-based verification instead).
+    { provide: APP_GUARD, useClass: SupabaseJwtGuard },
+    // Runs after the guard above (interceptors always run after guards):
+    // scopes every DB call for the rest of the request to the authenticated
+    // user, which is what Phase 13's FORCE ROW LEVEL SECURITY policies key off.
+    { provide: APP_INTERCEPTOR, useClass: UserContextInterceptor },
   ],
 })
 export class AppModule {}

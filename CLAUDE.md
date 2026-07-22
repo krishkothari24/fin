@@ -20,8 +20,9 @@ Hard product constraints (they shape every decision):
   categories, account types, and recurring streams — never add a model to categorize.
 - **Multi-tenant.** Every row belongs to a user; user A must never see user B's data.
 
-Phases 1–12 are complete. See STATE.md §2 (phases 1–8) and §22–25 (phases 9–12: manual
-assets/liabilities, budgets, transaction notes/tags/splits, goals).
+Phases 1–13 are complete. See STATE.md §2 (phases 1–8), §22–25 (phases 9–12: manual
+assets/liabilities, budgets, transaction notes/tags/splits, goals), and §27 (phase 13: go-live
+hardening — global auth guard, fail-fast prod secrets, frontend CSP, RLS as a real backstop).
 
 ## Layout
 
@@ -111,9 +112,21 @@ pnpm --filter @fin/api e2e:<phase>       # sandbox|sync|read|dashboard|rls|harde
 
 ## Conventions
 
-- **Every user route is behind `SupabaseJwtGuard`** and reads the user via `@CurrentUser()`;
-  **every query is scoped by `userId`** in the service layer (layer-1 authz). Postgres RLS is
-  defense-in-depth only — the API connects as owner and bypasses it. (SECURITY.md)
+- **`SupabaseJwtGuard` is global (default-deny)** — every route needs a valid JWT unless marked
+  `@Public()`. Reads the user via `@CurrentUser()`; **every query is scoped by `userId`** in the
+  service layer (layer-1 authz). (SECURITY.md)
+- **Two Prisma clients, not one.** `PrismaService` (request-scoped, `DATABASE_URL`) is wrapped
+  per-HTTP-request in a transaction with Postgres's `app.user_id` GUC set
+  (`UserContextInterceptor`) — every table has `FORCE ROW LEVEL SECURITY` keyed on that GUC, a
+  real backstop against a service-layer authz bug, not just documentation of intent.
+  `PrismaOwnerService` (`DIRECT_URL`, owner role, bypasses RLS) is for the handful of call sites
+  that interleave a **Plaid API call** with DB writes — `ItemsService`, the four pg-boss sync
+  engines, `SnapshotService`, the webhook controller. Wrapping those in the per-request
+  transaction caused **real deadlocks** under concurrent access (proven live) because Postgres
+  transactions can't safely span slow network I/O. **Rule of thumb: if a service method calls
+  `PlaidService` or runs as a pg-boss job, inject `PrismaOwnerService`; everything else
+  (pure DB read/write, user-input-driven queries) injects `PrismaService`.** Controllers whose
+  service layer uses `PrismaOwnerService` must be marked `@SkipUserContext()`. (STATE.md §27.4)
 - **Aggregations exclude hidden accounts** (`Account.isHidden`). Note `isHidden` (a column,
   changes totals) is distinct from `DashboardConfig.hiddenAccountIds` (a visual preference only).
 - **Plaid access tokens are AES-256-GCM encrypted at rest**, decrypted only in-method. Never

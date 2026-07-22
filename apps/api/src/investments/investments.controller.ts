@@ -1,11 +1,10 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { ListInvestmentTransactionsQuery } from "./dto/list-investment-transactions.query";
 import { InvestmentsService } from "./investments.service";
 
 /** Read API for Plaid Investments: current holdings + investment transactions. */
-@UseGuards(SupabaseJwtGuard)
 @Controller("investments")
 export class InvestmentsController {
   constructor(private readonly investments: InvestmentsService) {}

@@ -1,12 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { ManualAssetsService } from "./manual-assets.service";
 import { CreateManualAssetDto } from "./dto/create-manual-asset.dto";
 import { UpdateManualAssetDto } from "./dto/update-manual-asset.dto";
 
 /** CRUD for user-entered, off-platform net-worth items (not synced from Plaid). */
-@UseGuards(SupabaseJwtGuard)
 @Controller("manual-assets")
 export class ManualAssetsController {
   constructor(private readonly manualAssets: ManualAssetsService) {}

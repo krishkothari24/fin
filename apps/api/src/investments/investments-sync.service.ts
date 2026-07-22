@@ -3,7 +3,7 @@ import { InvestmentAccount, Security as PlaidSecurity } from "plaid";
 import { CryptoService } from "../crypto/crypto.service";
 import { mapPlaidAccount } from "../items/account.mapper";
 import { PlaidService } from "../plaid/plaid.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { PrismaOwnerService } from "../prisma/prisma-owner.service";
 import {
   mapPlaidHolding,
   mapPlaidInvestmentTransaction,
@@ -45,7 +45,7 @@ export class InvestmentsSyncService {
   private readonly logger = new Logger(InvestmentsSyncService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaOwnerService,
     private readonly plaid: PlaidService,
     private readonly crypto: CryptoService,
   ) {}

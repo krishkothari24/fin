@@ -3,7 +3,7 @@ import { AccountBase, RemovedTransaction, Transaction } from "plaid";
 import { CryptoService } from "../crypto/crypto.service";
 import { mapPlaidAccount } from "../items/account.mapper";
 import { PlaidService } from "../plaid/plaid.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { PrismaOwnerService } from "../prisma/prisma-owner.service";
 import { mapPlaidTransaction } from "./transaction.mapper";
 
 export interface SyncResult {
@@ -29,7 +29,7 @@ export class SyncService {
   private readonly logger = new Logger(SyncService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaOwnerService,
     private readonly plaid: PlaidService,
     private readonly crypto: CryptoService,
   ) {}

@@ -1,10 +1,9 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { AggregationsService } from "./aggregations.service";
 import { DateRangeQuery, NetWorthQuery } from "./dto/aggregation.query";
 
-@UseGuards(SupabaseJwtGuard)
 @Controller("aggregations")
 export class AggregationsController {
   constructor(private readonly aggregations: AggregationsService) {}

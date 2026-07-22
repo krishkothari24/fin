@@ -10,6 +10,18 @@ section is fine. See [docs/STATE.md](docs/STATE.md) for what already exists and
       [apps/web/src/lib/format.ts](apps/web/src/lib/format.ts) use
       `Intl.NumberFormat`/`Intl.DateTimeFormat` and are the only formatting path used
       across routes/widgets.
+- [x] **Google OAuth sign-in** — ✅ done and verified live. "Continue with Google"
+      button in [apps/web/src/routes/sign-in.tsx](apps/web/src/routes/sign-in.tsx)
+      alongside the existing email/password form (kept, not replaced). Calls
+      `supabase.auth.signInWithOAuth({ provider: "google" })`, redirects back to
+      `/sign-in` which already bounces to `/` once a session exists — no new route
+      needed. No backend/schema changes (JWT guard + `ensureProfile()` are
+      provider-agnostic). Google Cloud OAuth client + Supabase provider config
+      done 2026-07-19 — confirmed in-browser that clicking the button correctly
+      redirects to Google's real account picker scoped to the project's Supabase
+      callback URL (stopped short of completing an actual login, since that grants
+      a real OAuth session on your Google account — full click-through login is
+      yours to do whenever).
 
 ## Product / Plaid
 
@@ -49,6 +61,21 @@ section is fine. See [docs/STATE.md](docs/STATE.md) for what already exists and
 - See [docs/SECURITY.md](docs/SECURITY.md) → "Go-to-production checklist" (Plaid
   Production, webhook URL/tunnel, Sentry DSN, Render deploy).
   .env file should just be 1 for backend and front end. look into it.
+- [x] **Phase 13 go-live hardening** — ✅ done (2026-07-22). Global default-deny
+      auth guard, fail-fast prod secret validation, frontend CSP, and RLS as a
+      real backstop (`FORCE ROW LEVEL SECURITY` + non-owner `app_runtime` role,
+      live-verified deny-by-default + correct per-user scoping). Full audit
+      found no leaked secrets and no IDOR gaps in the existing code. See
+      [docs/STATE.md](docs/STATE.md) §27 and
+      [docs/SECURITY.md](docs/SECURITY.md).
+- [ ] `app_runtime`'s DB password still needs provisioning at deploy time
+      (`ALTER ROLE app_runtime WITH PASSWORD '...'`, out-of-band, never in a
+      file) and `DATABASE_URL` needs pointing at it for production — see
+      SECURITY.md checklist step 2. Local dev stays on the owner role.
+- [ ] Known pre-existing flaky race (found during Phase 13 testing, not caused
+      by it): concurrent pg-boss sync jobs vs. a near-simultaneous item removal
+      can occasionally deadlock (`e2e:goals` step 7, passes on retry). Not
+      security-relevant — worth a real fix later. See STATE.md §27.5.
 
 ## Roadmap — friends, brokerages, AI trade advisor (assessed 2026-07-19)
 
@@ -63,14 +90,37 @@ gain/loss) — see [docs/STATE.md](docs/STATE.md) §20 and §9/§19.1. Friends c
 already sign up and connect their own brokerages today; nothing new needed there.
 
 ### Phase A — Go live (blocks real friend usage; ops, not code)
-- [ ] Plaid Production access (dashboard app is Sandbox-only today)
-- [ ] Deploy API as a persistent Node service (pg-boss workers + webhooks need a
-      long-running process, not serverless) — Railway is the likely target
-- [ ] Deploy `apps/web` pointed at the deployed API
-- [ ] Public `PLAID_WEBHOOK_URL`, verify a real `SYNC_UPDATES_AVAILABLE` round-trip
-- [ ] Turn on Sentry (`SENTRY_DSN`)
-- [ ] Rotate any exposed secrets, confirm least-privilege DB creds
+
+Decided 2026-07-19: **$0/mo to start** — Render free tier for the API (accepts
+cold-starts/webhook delay as the tradeoff), free static host for `apps/web`,
+existing Supabase free tier. See [render.yaml](render.yaml) (Render Blueprint,
+ready to import — `sync: false` env vars still need filling in the dashboard).
+
+- [x] `render.yaml` blueprint written — build `pnpm api:build`, start
+      `node apps/api/dist/main.js`, health check `/api/health`, free plan.
+      `PLAID_ENV` and `SENTRY_DSN` are now required `sync: false` fills
+      (2026-07-22) — the blueprint no longer silently defaults to sandbox or
+      skips Sentry.
+- [ ] Import `render.yaml` at Render, fill in the `sync: false` secrets
+      (`DATABASE_URL` — **app_runtime's** credentials, not the owner's, see
+      SECURITY.md checklist step 2 — `DIRECT_URL`, `SUPABASE_*`, `PLAID_*`,
+      `ENCRYPTION_KEY`, `CORS_ORIGINS`, `SENTRY_DSN`) — manual, needs your
+      actual account/secrets
+- [ ] Deploy `apps/web` (static `dist/`) to Vercel or Cloudflare Pages free tier,
+      set `VITE_API_BASE_URL` to the Render URL — manual, needs your account
+- [ ] Plaid Production access (dashboard app is Sandbox-only today) — manual,
+      likely the real cost driver, independent of hosting choice
+- [ ] Public `PLAID_WEBHOOK_URL` → deployed Render URL's `/api/plaid/webhook`,
+      verify a real `SYNC_UPDATES_AVAILABLE` round-trip
+- [ ] Rotate any exposed secrets (git history scan came back clean — nothing
+      found to rotate, but re-check anything ever pasted outside `.env`),
+      confirm least-privilege DB creds (this is what `app_runtime` is)
 - [ ] Publish a privacy policy (real requirement once friends' PII is involved)
+- [ ] Turn on Sentry — decided 2026-07-22 to do this now, not defer. Create a
+      free Sentry project, set `SENTRY_DSN` (already wired end-to-end, no code
+      change needed — see docs/STATE.md §27).
+- Explicitly deferred (not needed to start, zero rework to add later): paid
+  Supabase tier
 
 ### Phase B — Brokerage UI depth (parallelizable with Phase A, low risk)
 - [ ] Asset allocation breakdown (by security type/sector), charted

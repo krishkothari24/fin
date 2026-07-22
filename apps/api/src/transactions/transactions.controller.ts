@@ -1,12 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Put, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Put, Query } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { AuthUser, SupabaseJwtGuard } from "../auth/supabase-jwt.guard";
+import { AuthUser } from "../auth/supabase-jwt.guard";
 import { ListTransactionsQuery } from "./dto/list-transactions.query";
 import { UpdateTransactionDetailDto } from "./dto/update-transaction-detail.dto";
 import { SetTransactionSplitsDto } from "./dto/set-transaction-splits.dto";
 import { TransactionsService } from "./transactions.service";
 
-@UseGuards(SupabaseJwtGuard)
 @Controller("transactions")
 export class TransactionsController {
   constructor(private readonly transactions: TransactionsService) {}

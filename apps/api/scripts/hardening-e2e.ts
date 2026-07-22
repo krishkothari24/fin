@@ -7,6 +7,11 @@
  *     (statusCode/error/message/requestId, no stack leak)
  *   - the global rate limiter returns 429 once the per-IP budget is exceeded
  *   - the health check is exempt from throttling (@SkipThrottle)
+ *   - every real controller requires auth (401 with no bearer token) except the
+ *     explicit @Public() allow-list (health, Plaid webhook) — a regression test
+ *     for the global default-deny SupabaseJwtGuard: one representative route per
+ *     controller is enough, since the guard's @Public() check runs at the
+ *     controller-class level and none of these controllers override it per-method
  *
  * Run: pnpm --filter @fin/api e2e:hardening   (dev-shell sandbox must be disabled)
  */
@@ -49,6 +54,42 @@ async function main() {
     assert(typeof unauthBody.requestId === "string", "body should carry requestId");
     assert(!("stack" in unauthBody), "error body must not leak a stack trace");
     console.log(`   401 { statusCode, error, message, requestId } — no stack ✓`);
+
+    console.log("2b) every non-public controller requires auth…");
+    // One representative route per controller — a new controller added without
+    // @UseGuards used to need an explicit annotation; now the global guard
+    // default-denies unless the controller opts out with @Public().
+    const guardedRoutes: Array<{ method: "GET" | "POST"; path: string }> = [
+      { method: "GET", path: "/items" },
+      { method: "POST", path: "/plaid/link-token" },
+      { method: "GET", path: "/accounts" },
+      { method: "GET", path: "/transactions" },
+      { method: "GET", path: "/aggregations/net-worth" },
+      { method: "GET", path: "/dashboard/config" },
+      { method: "GET", path: "/investments/holdings" },
+      { method: "GET", path: "/liabilities" },
+      { method: "GET", path: "/recurring" },
+      { method: "GET", path: "/manual-assets" },
+      { method: "GET", path: "/budgets" },
+      { method: "GET", path: "/goals" },
+    ];
+    for (const { method, path } of guardedRoutes) {
+      const res = await fetch(`${base}${path}`, { method });
+      assert(res.status === 401, `${method} ${path} should 401 with no token, got ${res.status}`);
+      await res.arrayBuffer(); // drain
+    }
+    console.log(`   ${guardedRoutes.length} controllers all 401 without a token ✓`);
+
+    console.log("2c) the @Public() allow-list stays reachable without a token…");
+    const publicHealth = await fetch(`${base}/health`);
+    assert(publicHealth.status === 200, `GET /health should stay public, got ${publicHealth.status}`);
+    const publicWebhook = await fetch(`${base}/plaid/webhook`, { method: "POST", body: "{}" });
+    assert(
+      publicWebhook.status !== 401,
+      `POST /plaid/webhook must not require a bearer token, got ${publicWebhook.status}`,
+    );
+    await publicWebhook.arrayBuffer();
+    console.log("   /health and /plaid/webhook remain reachable without auth ✓");
 
     console.log("3) unknown route -> sanitized 404…");
     const nf = await fetch(`${base}/does-not-exist-${Date.now()}`);

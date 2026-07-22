@@ -1,13 +1,22 @@
 /**
- * Live end-to-end check for Phase 6 Row-Level Security.
+ * Live end-to-end check for Phase 6 Row-Level Security, extended in Phase 13
+ * for the `app_runtime` role (the API's own runtime identity once DATABASE_URL
+ * is cut over — see migration `20260722000000_phase13_force_rls_app_runtime`).
  *
  * Seeds two users (A, B) directly, then proves:
- *   - the OWNER connection (what the API uses) still sees everything — RLS does
- *     not break the app (no FORCE),
+ *   - the OWNER connection (what the API uses today) still sees everything —
+ *     RLS does not break the app (no FORCE on the owner),
  *   - a direct `authenticated` session for user B sees ONLY user B's rows across
  *     accounts / transactions / items (cross-tenant reads are blocked at the DB),
  *   - the encrypted access-token column is not selectable via that path,
- *   - the webhook_events system table is invisible to `authenticated`.
+ *   - the webhook_events system table is invisible to `authenticated`,
+ *   - Phase 13: `app_runtime` with NO `app.user_id` set sees ZERO rows on a
+ *     FORCE-RLS table — deny by default, the actual point of the change,
+ *   - `app_runtime` scoped to user A sees only A's account, and an UPDATE aimed
+ *     at B's account (while scoped to A) silently affects zero rows rather than
+ *     leaking a cross-user write,
+ *   - `app_runtime` can read the encrypted token column (unlike `authenticated`
+ *     — the API needs it) once correctly scoped to the owning user.
  *
  * Run: pnpm --filter @fin/api e2e:rls   (dev-shell sandbox must be disabled)
  */
@@ -34,6 +43,25 @@ async function asAuthenticated<T>(
       `SELECT set_config('request.jwt.claims', '{"sub":"${userId}","role":"authenticated"}', true)`,
     );
     await tx.$executeRawUnsafe(`SET LOCAL ROLE authenticated`);
+    return fn(tx);
+  });
+}
+
+/**
+ * Run a block as `app_runtime`, optionally scoped to `userId` (the same
+ * `app.user_id` GUC PrismaService.withUserContext sets in the real app). Pass
+ * `undefined` to prove the deny-by-default case: no GUC set at all.
+ */
+async function asAppRuntime<T>(
+  direct: PrismaClient,
+  userId: string | undefined,
+  fn: (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">) => Promise<T>,
+): Promise<T> {
+  return direct.$transaction(async (tx) => {
+    if (userId) {
+      await tx.$executeRawUnsafe(`SELECT set_config('app.user_id', '${userId}', true)`);
+    }
+    await tx.$executeRawUnsafe(`SET LOCAL ROLE app_runtime`);
     return fn(tx);
   });
 }
@@ -145,7 +173,54 @@ async function main() {
     }
     assert(webhookBlocked, "webhook_events must NOT be selectable by authenticated");
 
-    console.log("\n✅ Phase 6 RLS isolation E2E passed");
+    console.log("6) Phase 13: app_runtime with NO app.user_id set sees ZERO rows (FORCE RLS)…");
+    const noContext = await asAppRuntime(direct, undefined, (tx) =>
+      tx.$queryRawUnsafe<{ plaid_account_id: string }[]>(
+        `SELECT plaid_account_id FROM accounts WHERE plaid_account_id LIKE 'ac_${tag}_%'`,
+      ),
+    );
+    assert(
+      noContext.length === 0,
+      `app_runtime with no app.user_id must see nothing, saw ${JSON.stringify(noContext)}`,
+    );
+    console.log("   0 rows visible with the GUC unset ✓");
+
+    console.log("7) app_runtime scoped to user A sees ONLY A's account…");
+    const asA = await asAppRuntime(direct, userA, (tx) =>
+      tx.$queryRawUnsafe<{ plaid_account_id: string }[]>(
+        `SELECT plaid_account_id FROM accounts WHERE plaid_account_id LIKE 'ac_${tag}_%'`,
+      ),
+    );
+    assert(
+      asA.length === 1 && asA[0].plaid_account_id === `ac_${tag}_${userA}`,
+      `app_runtime as A must see only A's account, saw ${JSON.stringify(asA)}`,
+    );
+    console.log("   A saw exactly its own 1 account ✓");
+
+    console.log("8) app_runtime scoped to A cannot write B's account (cross-user write blocked)…");
+    const updateResult = await asAppRuntime(direct, userA, (tx) =>
+      tx.$executeRawUnsafe(
+        `UPDATE accounts SET name = 'hacked' WHERE plaid_account_id = 'ac_${tag}_${userB}'`,
+      ),
+    );
+    assert(updateResult === 0, `update scoped to A must affect 0 of B's rows, affected ${updateResult}`);
+    const bAccountUnchanged = await prisma.account.findFirst({
+      where: { plaidAccountId: `ac_${tag}_${userB}` },
+      select: { name: true },
+    });
+    assert(bAccountUnchanged?.name === "Checking", "B's account must be unmodified");
+    console.log("   0 rows affected; B's account unchanged ✓");
+
+    console.log("9) app_runtime scoped to A CAN read the encrypted token column (unlike authenticated)…");
+    const tokenReadable = await asAppRuntime(direct, userA, (tx) =>
+      tx.$queryRawUnsafe<{ access_token_ciphertext: string }[]>(
+        `SELECT access_token_ciphertext FROM plaid_items WHERE plaid_item_id = 'it_${tag}_${userA}'`,
+      ),
+    );
+    assert(tokenReadable.length === 1, "app_runtime as A must be able to read its own item's token column");
+    console.log("   token column readable when correctly scoped ✓");
+
+    console.log("\n✅ Phase 6+13 RLS isolation E2E passed");
   } finally {
     await prisma.profile
       .deleteMany({ where: { id: { in: [userA, userB] } } })

@@ -1,6 +1,7 @@
 # fin-dashboard — Technical State of the Application
 
-_Snapshot as of 2026-07-07 · Phases 1–8 complete (Phase 8 = Plaid Liabilities + Recurring Transactions) · security → [SECURITY.md](./SECURITY.md)_
+_Snapshot as of 2026-07-22 · Phases 1–13 complete (Phase 13 = go-live hardening: auth guard, prod
+secrets, CSP, RLS backstop) · security → [SECURITY.md](./SECURITY.md)_
 
 This document is the ground-truth of **what exists, how it works, and why** — written
 to be read end-to-end by someone who has never touched Prisma, Plaid, or NestJS. It is
@@ -51,6 +52,7 @@ The build is organized into phases. 1–12 (backend) plus the `apps/web` fronten
 | **11** | **Transaction notes/tags/category overrides/splits** | ✅ **done, verified live** |
 | **12** | **Goals**: savings-target / debt-payoff tracking, optionally linked to a live account | ✅ **done, verified live** |
 | — | **`apps/web` frontend**: the whole product surface as a Vite + React SPA (§26) | ✅ **done, verified live in browser** |
+| **13** | **Go-live hardening**: global default-deny auth guard, fail-fast prod secrets, frontend CSP, and RLS as a real backstop (`FORCE ROW LEVEL SECURITY` + non-owner `app_runtime` role) | ✅ **done, verified live** |
 
 **What "Phase 2 verified live" means concretely:** we ran a real end-to-end script against
 your real Supabase database and Plaid's Sandbox. It connected the fake bank "First Platypus
@@ -1425,3 +1427,123 @@ anything backend-side.
 - **No account rename UI** (§26.4) — backend supports it, frontend doesn't expose it.
 - **No committed frontend test suite.** Verification so far has been interactive (Playwright in
   Phases 9–12, browser automation here) — there's no regression net for `apps/web` today.
+
+---
+
+## 27. Phase 13 in depth — go-live hardening (auth guard, prod secrets, CSP, RLS backstop)
+
+Triggered by an explicit ask: go live with real Plaid **Production** data for the owner and
+friends, with "top-notch security." Before writing any code, a live audit (not a docs read) of
+every service's DB queries, the RLS migrations, crypto/token handling, git history, and the
+frontend auth flow found **no IDOR gaps and no leaked secrets** — the findings below are
+hardening on top of an already-sound baseline, not bug fixes.
+
+### 27.1 Global default-deny auth guard
+
+`SupabaseJwtGuard` moved from per-controller `@UseGuards` to a global `APP_GUARD`
+(`app.module.ts`), with a new `@Public()` decorator (`auth/public.decorator.ts`) exempting
+exactly `GET /health` and `POST /plaid/webhook`. `scripts/hardening-e2e.ts` step 2b enumerates
+one route per controller and asserts every non-public one 401s with no token — a regression
+test for exactly the class of bug this closes (a future controller shipping without an auth
+annotation).
+
+### 27.2 Fail-fast production secrets
+
+`config/env.validation.ts` deliberately leaves every secret optional so local dev/CI boot
+without them. `bootstrap.ts`'s new `assertProductionSecrets()` throws at boot — before
+`app.listen()` — if `NODE_ENV=production` and any of `DATABASE_URL, DIRECT_URL, SUPABASE_URL,
+SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY, PLAID_CLIENT_ID, PLAID_SECRET, ENCRYPTION_KEY,
+CORS_ORIGINS` is missing — turning a silent misconfiguration into a failed deploy instead of an
+opaque 500 on a real user's first Plaid link.
+
+### 27.3 Frontend CSP
+
+`apps/web/vercel.json` gained a `headers` block: a `Content-Security-Policy` allow-listing
+`cdn.plaid.com` (Link's iframe/script), `*.supabase.co` (auth), and the API origin, plus
+`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`. Mitigates XSS-driven session-token
+theft, since Supabase's SDK stores the session in `localStorage` by default. Needs live
+verification post-deploy (Vercel headers don't apply to local `vite dev`) — watch the console for
+CSP violations through sign-in (incl. Google OAuth) and Plaid Link.
+
+### 27.4 RLS as a real backstop — `FORCE ROW LEVEL SECURITY` + `app_runtime`
+
+The Phase 6 RLS policies only ever applied to Supabase's `authenticated`/`anon` roles; the API
+connects as the table **owner**, which bypasses RLS regardless of policy. Phase 13 makes RLS
+apply to the API's own connection too, for the part of the app where it matters most.
+
+**New Postgres role `app_runtime`** (migrations `…_phase13_force_rls_app_runtime` and
+`…_phase13b_app_runtime_grant`): non-owner, `NOBYPASSRLS`, `LOGIN` with no password set yet (safe
+— unusable over the network until deliberately provisioned at deploy time). Every user-scoped
+table gets `FORCE ROW LEVEL SECURITY` plus an `app_runtime`-scoped policy covering all of
+SELECT/INSERT/UPDATE/DELETE, keyed on `current_setting('app.user_id', true)::uuid` — reusing the
+exact ownership-chain joins the `authenticated` policies already had. `securities` and
+`webhook_events` get unrestricted `app_runtime` policies (not user-scoped data).
+
+**How the GUC gets set:** `PrismaService.withUserContext(userId, fn)`
+(`prisma/prisma.service.ts`) opens one transaction, runs `set_config('app.user_id', userId,
+true)`, then runs `fn` inside it. Every model-delegate property and `$transaction`/`$queryRaw`/
+`$executeRaw` are monkey-patched in the constructor to transparently redirect to that transaction
+via an `AsyncLocalStorage` (`prisma/prisma-context.ts`) whenever one is open — so every existing
+`this.prisma.x.y(...)` call site across all 16 services works completely unchanged.
+`UserContextInterceptor` (`auth/user-context.interceptor.ts`, a global `APP_INTERCEPTOR` running
+right after the auth guard) wraps every HTTP request this way automatically.
+
+**A real bug this surfaced, not just designed around:** wrapping an entire unit of work in one
+Postgres transaction is only safe if nothing inside it does slow external I/O. The first version
+of this wrapped the *whole* pg-boss sync jobs (which call Plaid, then write) in one transaction —
+live testing (`e2e:sync`, then `e2e:goals`) hit real `PrismaClientKnownRequestError`s: a
+transaction-not-found error (Prisma's default 5s transaction timeout expiring mid-Plaid-call) and
+twice a genuine Postgres `deadlock detected` (40P01) between overlapping syncs of the same item —
+exactly the concurrent-access scenario this app's own idempotency tests deliberately exercise
+(§16.3). The fix: background jobs and any HTTP path that calls Plaid don't get RLS-wrapped at
+all.
+
+**`PrismaOwnerService`** (`prisma/prisma-owner.service.ts`) is a second, separately-connected
+Prisma client (via `DIRECT_URL`, the owner role) for exactly those call sites:
+- `SyncService`, `InvestmentsSyncService`, `LiabilitiesSyncService`, `RecurringSyncService`,
+  `SnapshotService` — all pg-boss background jobs (`QueueService` documents why in full: one
+  server-resolved `itemId` at a time, not arbitrary user input, so RLS buys much less there).
+- `ItemsService` (link-token, exchange, refresh, remove) — every method calls Plaid, and each
+  already scopes its own queries by `userId` explicitly (`requireItem`) before doing so.
+  `ItemsController`/`PlaidLinkController` are marked `@SkipUserContext()`
+  (`auth/skip-user-context.decorator.ts`) to opt out of the interceptor.
+- `PlaidWebhookController` — resolves `PlaidItem` by Plaid's own `item_id` before any `userId` is
+  known, which is the definition of a not-yet-user-scoped lookup.
+
+Everything else — accounts, transactions, aggregations, dashboard, investments, liabilities,
+recurring, manual-assets, budgets, goals — is pure DB read/write with no external calls, so it
+keeps the full `withUserContext` / FORCE RLS treatment. This is also where user-supplied query
+input actually drives lookups (filters, ids, pagination), which is where IDOR risk concentrates —
+so the split lands the strongest defense-in-depth exactly where it matters most.
+
+**Proof (live, `pnpm --filter @fin/api e2e:rls`, extended):** `app_runtime` with no `app.user_id`
+set sees **zero** rows on a FORCE-RLS table; scoped to user A it sees only A's account; an UPDATE
+aimed at user B's account while scoped to A affects **zero** rows and leaves B's row unmodified;
+the encrypted token column *is* readable once correctly scoped (unlike `authenticated`, which
+never gets that column). The full existing E2E suite (sandbox, sync, read, dashboard, hardening,
+investments, liabilities-recurring, manual-assets, budgets, transaction-details, goals) was
+re-run and stayed green after every change in this phase.
+
+**Cutover is a deploy-time step**, not automatic — `DATABASE_URL` still points at the owner role
+locally and will until the production deploy explicitly provisions `app_runtime`'s password and
+switches to it. See [SECURITY.md](./SECURITY.md) → "Go-to-production checklist."
+
+### 27.5 A pre-existing race, found but not caused by this phase
+
+While testing Phase 13, `e2e:goals` hit a `deadlock detected` on `items.removeItem`'s cascading
+delete, unrelated to the RLS changes (confirmed: `ItemsService` was already on the owner
+connection at that point, same as before Phase 13, and the deadlock reproduced then cleared on a
+bare retry — a timing-dependent race, not a deterministic regression). Root cause: several
+pg-boss jobs enqueued together at connect time (sync, investments, liabilities, recurring) can
+still be actively writing an item's child rows when a near-simultaneous item removal cascades
+through those same rows. Documented here as a known, pre-existing reliability gap in the sync
+engine's handling of concurrent deletes — out of scope for this security-focused phase, not
+silently ignored.
+
+### 27.6 Other small fixes bundled with this phase
+
+- `render.yaml`'s `PLAID_ENV` was hardcoded to `sandbox` — changed to `sync: false` so a real
+  go-live deploy can't silently keep hitting Plaid Sandbox; also added `SENTRY_DSN` as a required
+  `sync: false` var (previously commented out / deferred).
+- Full git-history secret scan confirmed clean — no `.env` or credential has ever been committed,
+  at any point, in this repo's history.

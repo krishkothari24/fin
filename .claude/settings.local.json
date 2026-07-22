@@ -9,7 +9,10 @@
       "Bash(pnpm --filter @fin/api prisma:generate)",
       "Bash(node -e \"const p=require\\('./apps/api/package.json'\\); console.log\\('client', p.dependencies['@prisma/client']\\); console.log\\('cli', p.devDependencies['prisma']\\)\")",
       "Bash(pnpm --filter @fin/shared build)",
-      "Bash(pnpm --filter @fin/api build)"
+      "Bash(pnpm --filter @fin/api build)",
+      "Bash(git *)",
+      "Bash(grep -iE '\\\\.env$|\\\\.env\\\\.')",
+      "Bash(echo \"exit code: $?\")"
     ]
   }
 }

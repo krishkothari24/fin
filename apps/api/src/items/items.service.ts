@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { AccountBase } from "plaid";
 import { CryptoService } from "../crypto/crypto.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { PrismaOwnerService } from "../prisma/prisma-owner.service";
 import { PlaidService } from "../plaid/plaid.service";
 import { QueueService } from "../sync/queue.service";
 import { mapPlaidAccount } from "./account.mapper";
@@ -10,6 +10,17 @@ import { mapPlaidAccount } from "./account.mapper";
  * Item lifecycle orchestration: connect (exchange + encrypt + store), list,
  * re-auth, refresh balances, and remove. The Plaid access_token only ever exists
  * decrypted inside a single method call — at rest it is AES-GCM ciphertext.
+ *
+ * Uses PrismaOwnerService, not the request-scoped PrismaService: every method
+ * here interleaves a Plaid API call with DB writes, and Phase 13's
+ * per-request `withUserContext` (via UserContextInterceptor) holds one
+ * Postgres transaction open for its whole scope — fine for fast DB-only
+ * requests, but wrapping a Plaid round-trip in an open transaction caused a
+ * real deadlock in testing (`DELETE /items/:id` racing a background sync on
+ * the same item). ItemsController/PlaidLinkController are marked
+ * `@SkipUserContext()` to match. Every method below already scopes its own
+ * queries by `userId` explicitly (`requireItem`, `where: { userId }`), so
+ * this is no less safe than the RLS path — see docs/SECURITY.md.
  */
 @Injectable()
 export class ItemsService {
@@ -17,7 +28,7 @@ export class ItemsService {
 
   constructor(
     private readonly plaid: PlaidService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaOwnerService,
     private readonly crypto: CryptoService,
     private readonly queue: QueueService,
   ) {}

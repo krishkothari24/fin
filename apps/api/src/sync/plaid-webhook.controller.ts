@@ -11,7 +11,8 @@ import {
 import { SkipThrottle } from "@nestjs/throttler";
 import { Prisma } from "@prisma/client";
 import { Request } from "express";
-import { PrismaService } from "../prisma/prisma.service";
+import { Public } from "../auth/public.decorator";
+import { PrismaOwnerService } from "../prisma/prisma-owner.service";
 import { QueueService } from "./queue.service";
 import { WebhookVerificationService } from "./webhook-verification.service";
 
@@ -30,7 +31,15 @@ interface PlaidWebhookBody {
  *
  * SkipThrottle: Plaid controls delivery (and legitimately retries); signature
  * verification — not rate limiting — is what guards this endpoint.
+ *
+ * Uses PrismaOwnerService (bypasses RLS), not the request-scoped PrismaService:
+ * Plaid tells us only its own `item_id`, never our internal `userId`, so
+ * resolving "which item is this" is exactly the kind of not-yet-user-scoped
+ * lookup PrismaOwnerService exists for — consistent with the sync engines
+ * these webhooks enqueue work for, which also run on PrismaOwnerService (see
+ * QueueService).
  */
+@Public()
 @SkipThrottle()
 @Controller("plaid")
 export class PlaidWebhookController {
@@ -39,7 +48,7 @@ export class PlaidWebhookController {
   constructor(
     private readonly verifier: WebhookVerificationService,
     private readonly queue: QueueService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaOwnerService,
   ) {}
 
   @Post("webhook")
